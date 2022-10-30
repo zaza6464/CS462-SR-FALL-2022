@@ -1,7 +1,6 @@
 /* CS-462 Project : Implementation of Sliding Windows Protocol for efficient file transfer. */
 /* */
 /* Starting with a minimal client shell in the internet domain (https://www.linuxhowtos.org/C_C++/socket.htm) */
-/* using datagram sockets and UDP for connectionless asyncronous packet transfer. */
 /* */
 /* This is the CLIENT (which opens the file and sends the data in packets based on 3 protocols). */
 /* */
