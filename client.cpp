@@ -77,6 +77,14 @@ packetClass packets[MAX_WINDOW_SIZE];
 
 int main(int argc, char *argv[]) {
 
+    /*
+    int myInt;
+    long int myLongInt;
+    unsigned long myUnsignedLong;
+    std::cout << "Size of Int is:" << sizeof(myInt) << "\r\n";
+    std::cout << "Size of long int is:" << sizeof(myLongInt) << "\r\n";
+    std::cout << "Size of unsigned long is:" << sizeof(myUnsignedLong) << "\r\n";
+    */
 
 
     //prompt user for each of the following fields
@@ -317,7 +325,7 @@ void executeGBNProtocol(void) {
         readPacketsFromFile(numPacketsToRead);
     }
 
-    nprintWidow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     //sending now
     sendPackets(numPacketsToRead, sequenceNum);
