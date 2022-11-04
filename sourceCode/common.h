@@ -56,7 +56,7 @@ char *GetTimeStamp(char *timeStamp);
 int16_t MakeINT16(char buff[]);
 void BreakINT16(char buff[], int16_t i);
 
-int16_t MakeINT32(char buff[]);
+int32_t MakeINT32(char buff[]);
 void BreakINT32(char buff[], int16_t i);
 
 
