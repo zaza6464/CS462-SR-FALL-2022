@@ -18,7 +18,7 @@
 /* CRC generation code is modified from Michael Barr's open source code:
  *  https://barrgroup.com/Embedded-Systems/How-To/CRC-Calculation-C-Code
  */ 
-typedef unsigned long crc;
+typedef unsigned int crc;
 
 #define CRC_NAME "CRC-32"
 #define POLYNOMIAL 0x04C11DB7
@@ -57,7 +57,7 @@ int16_t MakeINT16(char buff[]);
 void BreakINT16(char buff[], int16_t i);
 
 int32_t MakeINT32(char buff[]);
-void BreakINT32(char buff[], int16_t i);
+void BreakINT32(char buff[], int32_t i);
 
 
 

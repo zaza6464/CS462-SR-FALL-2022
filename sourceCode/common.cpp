@@ -14,10 +14,10 @@
 /* used for crc algorithm */
 #define CRCWIDTH (8 * sizeof(crc))
 #define CRCTOPBIT (1 << (CRCWIDTH - 1))
-
+`
 int slidingWindowSizePrompt() {
 
-    std::cout << "Size of sliding window:" << std::endl;
+    std::cout << "Size of sliding window: (Press Enter to accept default of " +  << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
