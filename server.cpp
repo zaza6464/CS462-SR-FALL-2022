@@ -36,7 +36,7 @@ int numOutOfSequence = 0;
 int numOriginalPackets = 0;
 int rangeOfSequenceNumbers = 100; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
-std::string ipAddress = "172.23.0.11"; //IP address of the target server
+std::string ipAddress = "172.23.0.1"; //IP address of the target server
 int protocolType = 1; //0 for S&W, 1 for GBN, 2 for SR
 std::string filePath = "temp"; //path to file to be sent
 int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8

@@ -59,7 +59,7 @@ char buffer[MAX_BUF_SIZE];
 char rec_buffer[MAX_BUF_SIZE];
 // User supplied variables
 std::string filePath; //path to file to be sent
-std::string ipAddress = "172.23.0.11"; //IP address of the target server
+std::string ipAddress = "172.23.0.1"; //IP address of the target server
 int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
 int protocolType = 1; //0 for S&W, 1 for GBN, 2 for SR
@@ -76,6 +76,7 @@ bool gotLastAck = false;
 packetClass packets[MAX_WINDOW_SIZE];
 
 int main(int argc, char *argv[]) {
+
 
 
     //prompt user for each of the following fields
@@ -100,8 +101,9 @@ int main(int argc, char *argv[]) {
     situationalErrors = situationalErrorsPrompt();
 
     filePath = filePathPrompt();
-//    filePath = "cringe.txt";
-//    filePath = "65-B-18b.pdf";
+
+
+    filePath = "bruhmoment.txt";
 
 
 
@@ -315,7 +317,7 @@ void executeGBNProtocol(void) {
         readPacketsFromFile(numPacketsToRead);
     }
 
-    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+    nprintWidow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     //sending now
     sendPackets(numPacketsToRead, sequenceNum);
