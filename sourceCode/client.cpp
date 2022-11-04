@@ -37,8 +37,8 @@ std::ifstream fileInputStream;
 int sock;
 int num_bytes;
 int packet_bytes_read;
-uint16_t sendCheckSum;
-uint16_t receiveCheckSum;
+uint32_t sendCheckSum;
+uint32_t receiveCheckSum;
 uint16_t sequenceNum = 0;
 uint16_t nextSeqNum = 0;
 uint16_t lastSeqNum = 0;
@@ -77,6 +77,8 @@ packetClass packets[MAX_WINDOW_SIZE];
 
 int main(int argc, char *argv[]) {
 
+    // create the CRC lookup table so we can use it later.
+    crcTableInit();
 
     //prompt user for each of the following fields
     ipAddress = ipAddressPrompt();
@@ -398,6 +400,9 @@ void setMarkForRetransmit(uint16_t seq, int numPackets)
 
 }
 
+
+// if this doesn't work, double check START_DATA_INDEX is correct,
+// also check to make sure I didn't mess up changing crc from 16 to 32
 void generateRandomSituationalErrors(char* buff, uint16_t seq, int bsRead)
 {
 	// Don't do more than one of these errors at a time!
@@ -408,14 +413,14 @@ void generateRandomSituationalErrors(char* buff, uint16_t seq, int bsRead)
 		BreakINT16(buff, seq + rand() % 10 + 1);
 
 		// If we mutate the sequence number, we still need a good CRC so recalculate it
-		uint16_t CRC = crc16((uint8_t *) buff, bsRead + START_DATA_INDEX);
-		BreakINT16(&buff[bsRead + START_DATA_INDEX], CRC);
+		uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
+		BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
 
 	} else if (!((packets_sent + rand() % 10 + 1) % 10)) {
 		//10% of the time we will send a bad crc
 		//inducing bad crc
-		uint16_t CRC = rand() % 10 + 1;
-		BreakINT16(&buff[bsRead + START_DATA_INDEX], CRC);
+		uint32_t CRC = rand() % 10 + 1;
+		BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
 	} else if (!((packets_sent + rand() % 10 + 1) % 10)) {
 		//10% the packet will appear to be sent, but will be not actually be send/ it will be lost
 		simulateLost = true;
@@ -594,8 +599,8 @@ void doDoneStuff() {
     //we're done but to be safe we will send command to server to close the file
     //30,000 is a special sequence number close file code
     BreakINT16(buffer, 30000);
-    uint16_t CRC = crc16((uint8_t *) buffer, START_DATA_INDEX);
-    BreakINT16(&buffer[START_DATA_INDEX], CRC);
+    uint32_t CRC = crcFun((uint8_t *) buffer, START_DATA_INDEX);
+    BreakINT32(&buffer[START_DATA_INDEX], CRC);
     sendto(sock, buffer,
            WRAPPER_SIZE, 0, (const struct sockaddr *) &server, length);
 

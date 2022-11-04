@@ -6,7 +6,7 @@
 #ifndef CS_462_PROJECT_PACKET_STRUCT_H
 #define CS_462_PROJECT_PACKET_STRUCT_H
 
-
+// first 2 indices of each packet are for the sequence number, so data starts at index 2
 #define START_DATA_INDEX 2
 #define WRAPPER_SIZE 4
 
@@ -26,7 +26,7 @@ public:
     bool sent;
     bool ack;
     int packet_bytes_read;
-    uint16_t CRC;
+    uint32_t CRC;
     bool used;
 
 
@@ -54,8 +54,8 @@ public:
         used = true;
         memcpy(&buffer[START_DATA_INDEX], writeData, pbr);
         BreakINT16(buffer, sequenceNumber);
-        CRC = crc16((uint8_t *) buffer, packet_bytes_read + START_DATA_INDEX);
-        BreakINT16(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
+        CRC = crcFun((uint8_t *) buffer, packet_bytes_read + START_DATA_INDEX);
+        BreakINT32(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
     }
 
     char *getBuffPoint() {
@@ -69,8 +69,8 @@ public:
     void setSN(uint16_t sequenceNum) {
         sequenceNumber = sequenceNum;
         BreakINT16(buffer, sequenceNumber);
-        CRC = crc16((uint8_t *) buffer, packet_bytes_read + START_DATA_INDEX);
-        BreakINT16(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
+        CRC = crcFun((uint8_t *) buffer, packet_bytes_read + START_DATA_INDEX);
+        BreakINT32(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
     }
 
     bool getSent() {
@@ -89,9 +89,9 @@ public:
         ack = a;
     }
 
-    void updateCRC(uint16_t crc) {
+    void updateCRC(uint32_t crc) {
         CRC = crc;
-        BreakINT16(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
+        BreakINT32(&buffer[packet_bytes_read + START_DATA_INDEX], CRC);
     }
 
 

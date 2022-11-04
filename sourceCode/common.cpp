@@ -11,6 +11,10 @@
 #include "common.h"
 
 
+/* used for crc algorithm */
+#define CRCWIDTH (8 * sizeof(crc))
+#define CRCTOPBIT (1 << (CRCWIDTH - 1))
+
 int slidingWindowSizePrompt() {
 
     std::cout << "Size of sliding window:" << std::endl;
@@ -204,7 +208,59 @@ char *GetTimeStamp(char *timeStamp) {
     return timeStamp;
 }
 
-/* Table of CRC values for high–order byte */
+
+crc crcTable[256];
+
+/* crcTableInit() creates the crc lookup table.
+ * Only needs to be run once.
+ */
+void crcTableInit() {
+    crc remainder;
+    int dividend;
+    unsigned char bit;
+
+// calculate the remainder of all possible dividends
+    for (dividend = 0; dividend < 256; ++dividend) {
+
+        // start with dividend followed by zeroes
+        remainder = dividend << (CRCWIDTH - 8);
+
+        // division, bit by bit
+        for (bit = 8; bit > 0; --bit) {
+            if (remainder & CRCTOPBIT) { // current bit divides
+                remainder = remainder << 1 ^ POLYNOMIAL;
+            } else {                     // current bit doesn't divide
+                remainder = (remainder << 1);
+            }
+        }
+
+        crcTable[dividend] = remainder;
+    }
+} /* crcTableInit() */
+
+
+/* crcFun() calculates the crc value of a message and returns it. */
+crc crcFun(unsigned char const message[], int nBytes) {
+    crc remainder = INITIAL_REMAINDER; // in case we get a packet which starts with a lot of zeroes
+    unsigned char data;
+    int byte;
+
+// divide the message by the polynomial, one byte at a time.
+    for (byte = 0; byte < nBytes; ++byte) {
+        data = message[byte] ^ (remainder >> (CRCWIDTH - 8));
+        remainder = crcTable[data] ^ (remainder << 8);
+    }
+
+// the remainder is the crc
+    return remainder; 
+
+} /* crcFun() */
+
+
+
+
+/*/
+// Table of CRC values for high–order byte 
 static uint8_t auchCRCHi[] = {
         0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
         0x40, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
@@ -227,7 +283,7 @@ static uint8_t auchCRCHi[] = {
 };
 
 
-/* Table of CRC values for low–order byte */
+// Table of CRC values for low–order byte 
 static uint8_t auchCRCLo[] = {
         0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4,
         0x04, 0xCC, 0x0C, 0x0D, 0xCD, 0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09,
@@ -249,25 +305,52 @@ static uint8_t auchCRCLo[] = {
         0x40
 };
 
-/* The function returns the CRC as a unsigned short type */
+
+// The function returns the CRC as a unsigned short type 
 uint16_t crc16(uint8_t *data, int len) {
-    uint8_t uchCRCHi = 0xFF; /* high byte of CRC initialized */
-    uint8_t uchCRCLo = 0xFF; /* low byte of CRC initialized */
-    int index; /* will index into CRC lookup table */
+    uint8_t uchCRCHi = 0xFF; // high byte of CRC initialized 
+    uint8_t uchCRCLo = 0xFF; // low byte of CRC initialized 
+    int index; // will index into CRC lookup table 
     while (len--) {
-        index = uchCRCLo ^ *data++; /* calculate the CRC */
+        index = uchCRCLo ^ *data++; // calculate the CRC 
         uchCRCLo = uchCRCHi ^ auchCRCHi[index];
         uchCRCHi = auchCRCLo[index];
     }
     return (uchCRCHi << 8 | uchCRCLo);
 }
 
+
+//*/
+
+
+/* creates a 16 bit value from the first 2 indices of the array */
 int16_t MakeINT16(char buff[]) {
-    return (((int16_t) buff[0] & 0x00FF) |
-            (((int16_t) buff[1] << 8) & 0xFF00));
+    return (
+            (((int16_t) buff[0])       & 0x00FF) |
+            (((int16_t) buff[1] << 8)  & 0xFF00)
+            );
 }
 
+/* takes a 16 bit value and stores it in the first 2 indices of the array */
 void BreakINT16(char buff[], int16_t i) {
-    buff[0] = (char) (i & 0x00FF);
+    buff[0] = (char)  (i & 0x00FF);
     buff[1] = (char) ((i & 0xFF00) >> 8);
+}
+
+/* creates a 32 bit value from the first 4 indices of the array */
+int32_t MakeINT32(char buff[]) {
+    return (
+            (((int32_t) buff[0])       & 0x000000FF) |
+            (((int32_t) buff[1] << 8)  & 0x0000FF00) |
+            (((int32_t) buff[2] << 16) & 0x00FF0000) |
+            (((int32_t) buff[3] << 24) & 0xFF000000) 
+            );
+}
+
+/* takes a 32 bit value and stores it in the first 4 indices of the array  */
+void BreakINT32(char buff[], int32_t i) {
+    buff[0] = (char)  (i & 0x000000FF);
+    buff[1] = (char) ((i & 0x0000FF00) >> 8);
+    buff[2] = (char) ((i & 0x00FF0000) >> 16);
+    buff[3] = (char) ((i & 0xFF000000) >> 24);
 }

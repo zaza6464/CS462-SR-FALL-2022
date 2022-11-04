@@ -11,7 +11,24 @@
 #define SHOW_BUFFER 0
 #define MAX_WINDOW_SIZE 25
 #define DEFAULT_TIMEOUT_US 1000
-#define MAX_BUF_SIZE 11000
+#define MAX_BUF_SIZE 11000 // may need to change this if we don't have room for the crc
+                           // (since it takes up 4 indices instead of 2 now)
+
+
+/* CRC generation code is modified from Michael Barr's open source code:
+ *  https://barrgroup.com/Embedded-Systems/How-To/CRC-Calculation-C-Code
+ */ 
+typedef unsigned long crc;
+
+#define CRC_NAME "CRC-32"
+#define POLYNOMIAL 0x04C11DB7
+#define INITIAL_REMAINDER 0xFFFFFFFF
+//#define FINAL_XOR_VALUE 0xFFFFFFFF // might need this if CHECK_VALUE doesn't match
+#define CHECK_VALUE 0xCBF43926
+
+void crcTableInit();
+crc crcFun(unsigned char const message[], int nBytes);
+
 
 //error
 void error_and_exit(std::ostream& log, const char *msg);
@@ -36,11 +53,21 @@ void printWindow(std::ostream& console, std::ostream& log, int slidingWS, int se
 
 char *GetTimeStamp(char *timeStamp);
 
-/*
- * CRC generation code is copied from the Modbus specification.
- */
-uint16_t crc16(uint8_t *data, int len);
 int16_t MakeINT16(char buff[]);
 void BreakINT16(char buff[], int16_t i);
+
+int16_t MakeINT32(char buff[]);
+void BreakINT32(char buff[], int16_t i);
+
+
+
+
+/*
+ * CRC generation code is copied from the Modbus specification.
+ * NOT USED ANYMORE, KEPT FOR EMERGENCIES
+ */
+/*/
+uint16_t crc16(uint8_t *data, int len);
+//*/
 
 #endif //CS_462_PROJECT_COMMON_H

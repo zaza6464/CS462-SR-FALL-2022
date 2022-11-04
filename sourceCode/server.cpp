@@ -174,8 +174,9 @@ void executeGBNProtocol(void)
 
 		//First we need to verify the checksum
 		//calculating and adding crc checksum
-		uint16_t calc_CRC = crc16((uint8_t *) buffer, numCharsReceived - START_DATA_INDEX);
-		uint16_t rec_CRC = MakeINT16(&buffer[numCharsReceived - START_DATA_INDEX]);
+        // MAKE SURE THIS WORKS **********************************
+		uint32_t rec_CRC = MakeINT32(&buffer[numCharsReceived - START_DATA_INDEX]);
+		uint32_t calc_CRC = crcFun((uint8_t *) buffer, START_DATA_INDEX);
 		if (calc_CRC == rec_CRC) {
 			displayMessage(std::cout, logFile, "Checksum OK");
 			crcError = 0;
