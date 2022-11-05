@@ -35,7 +35,7 @@ std::ofstream logFile;
 std::ifstream fileInputStream;
 // Data for sockets
 int sock;
-int num_bytes;
+int num_bytes = 0;
 int packet_bytes_read;
 uint32_t sendCheckSum;
 uint32_t receiveCheckSum;
@@ -58,20 +58,21 @@ struct hostent *hp;
 char buffer[MAX_BUF_SIZE];
 char rec_buffer[MAX_BUF_SIZE];
 // User supplied variables
-std::string filePath; //path to file to be sent
-std::string ipAddress = "172.23.0.11"; //IP address of the target server
+std::string filePath = "/data/users/kranicac1696/src/bruhmoment.txt"; //path to file to be sent
+std::string ipAddress = "172.23.0.3"; //IP address of the target server
 int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
-int protocolType = 1; //0 for S&W, 1 for GBN, 2 for SR
-int packetSize = 1000; //specified size of packets to be sent
+int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
+int packetSize = 10; //specified size of packets to be sent
 int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
-int rangeOfSequenceNumbers = 100; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
+int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
 int readNewData = 1;
 int numPacketsToRead = slidingWindowSize;
 int at_end_of_file = 0;
 bool simulateLost = false;
 bool gotLastAck = false;
+char test[12] = {0,0,'t','h','i','s',' ','i','s',' ','a','n'};
 
 packetClass packets[MAX_WINDOW_SIZE];
 
@@ -80,30 +81,30 @@ int main(int argc, char *argv[]) {
     // create the CRC lookup table so we can use it later.
     crcTableInit();
 
+    //crc testcrc = crcFun((uint8_t *)test, 12);
+    //std::cout << "the crc of our test string is: " << testcrc << std::endl;
+
+
     //prompt user for each of the following fields
-    ipAddress = ipAddressPrompt();
-    portNum = portNumPrompt();
-    packetSize = packetSizePrompt();
+    ipAddress = ipAddressPrompt(ipAddress);
+    portNum = portNumPrompt(portNum);
+    packetSize = packetSizePrompt(packetSize);
     timeoutIntervalus = timeoutIntervalPrompt();
 
-    protocolType = protocolTypePrompt();
+    protocolType = protocolTypePrompt(protocolType);
 
     if (protocolType != 0) {
-        slidingWindowSize = slidingWindowSizePrompt();
-        numPacketsToRead = slidingWindowSize;
-    } else
-    {
-		slidingWindowSize = 1;
-	}
+        slidingWindowSize = slidingWindowSizePrompt(slidingWindowSize);
+    } else {
+        slidingWindowSize = 1;
+    }
 
-     rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
+    rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
 
-    situationalErrors = situationalErrorsPrompt();
+    situationalErrors = situationalErrorsPrompt(situationalErrors);
 
-    filePath = filePathPrompt();
-//    filePath = "cringe.txt";
-//    filePath = "65-B-18b.pdf";
+    filePath = filePathPrompt(filePath);
 
 
 
@@ -183,23 +184,23 @@ int main(int argc, char *argv[]) {
     //grabbing system ticks at start of test
     start_test_ticks = clock();
 
-	while (!at_end_of_file || !gotLastAck) {
-	// while (!at_end_of_file) {
-		switch (protocolType) {
-			case 0:
-				// executeSAWProtocol();
-				// break;
-			case 1:
-				executeGBNProtocol();
-				break;
-			case 2:
-				executeSRProtocol();
-				break;
-			default:
-				error_and_exit(logFile, "Exit, Invalid protocol type!");
-				break;
-		}
-	}
+    while (!at_end_of_file || !gotLastAck) {
+        // while (!at_end_of_file) {
+        switch (protocolType) {
+            case 0:
+                // executeSAWProtocol();
+                // break;
+            case 1:
+                executeGBNProtocol();
+                break;
+            case 2:
+                executeSRProtocol();
+                break;
+            default:
+                error_and_exit(logFile, "Exit, Invalid protocol type!");
+                break;
+        }
+    }
 
     doDoneStuff();
     return 0;
@@ -326,10 +327,10 @@ void executeGBNProtocol(void) {
     num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
 
     displayIntDataMessage(std::cout, logFile, "numbytes:", num_bytes, "");
-	if (num_bytes <= 0) {
-		//WE TIMED OUT!!!!!!!!
-		DisplayPacketTimedout(sequenceNum);
-		setMarkForRetransmit(sequenceNum, slidingWindowSize);
+    if (num_bytes <= 0) {
+        //WE TIMED OUT!!!!!!!!
+        DisplayPacketTimedout(sequenceNum);
+        setMarkForRetransmit(sequenceNum, slidingWindowSize);
 
     } else if (num_bytes > 0) {
 
@@ -348,83 +349,79 @@ void executeGBNProtocol(void) {
 
                 readNewData = 1;
 
-				if (at_end_of_file && (receivedSeqNum == lastSeqNum)) gotLastAck = true;
+                if (at_end_of_file && (receivedSeqNum == lastSeqNum)) gotLastAck = true;
 
-			} else {
-				//we are getting an ack for a future or past packet thats not in our window
-				//since this isn't what we want we won't do anything
-				setMarkForRetransmit(sequenceNum, slidingWindowSize);
-				outOfOrders++;
-			}
-		} else {
-			// We should never get a response that isn't an ACK
-			DisplayNakReceived(receivedSeqNum);
-			setMarkForRetransmit(sequenceNum, slidingWindowSize);
-			packets_failed++;
-		}
-	}
+            } else {
+                //we are getting an ack for a future or past packet thats not in our window
+                //since this isn't what we want we won't do anything
+                setMarkForRetransmit(sequenceNum, slidingWindowSize);
+                outOfOrders++;
+            }
+        } else {
+            // We should never get a response that isn't an ACK
+            DisplayNakReceived(receivedSeqNum);
+            setMarkForRetransmit(sequenceNum, slidingWindowSize);
+            packets_failed++;
+        }
+    }
 }
 
 void executeSRProtocol(void) {
-	executeGBNProtocol();
+    executeGBNProtocol();
 }
 
-void setMarkForRetransmit(uint16_t seq, int numPackets)
-{
-	int num = 0;
-	for (int i = 0; i < numPackets; i++) {
+void setMarkForRetransmit(uint16_t seq, int numPackets) {
+    int num = 0;
+    for (int i = 0; i < numPackets; i++) {
 
-		uint16_t tempSeq  = seq + i;
-		tempSeq = tempSeq % rangeOfSequenceNumbers;
+        uint16_t tempSeq = seq + i;
+        tempSeq = tempSeq % rangeOfSequenceNumbers;
 
-		int index = getPacketIndexBySN(tempSeq);
+        int index = getPacketIndexBySN(tempSeq);
 
-		// std::cout << "In setMarkForRetransmit. index : ";
-		// std::cout << index;
-		// std::cout << std::endl;
+        // std::cout << "In setMarkForRetransmit. index : ";
+        // std::cout << index;
+        // std::cout << std::endl;
 
-		if (index >= 0)
-		{
-			if (packets[index].getSent() == true)
-			{
-				retransmittedPackets++;
-			}
-			packets[index].setSent(false);
-			DisplayPacketRetransMess(tempSeq);
-			num++;
-		}
-		readNewData = 0;
-	}
+        if (index >= 0) {
+            if (packets[index].getSent() == true) {
+                retransmittedPackets++;
+            }
+            packets[index].setSent(false);
+            DisplayPacketRetransMess(tempSeq);
+            num++;
+        }
+        readNewData = 0;
+    }
 
-	numPacketsToRead = num;
+    numPacketsToRead = num;
 
 }
 
 
 // if this doesn't work, double check START_DATA_INDEX is correct,
 // also check to make sure I didn't mess up changing crc from 16 to 32
-void generateRandomSituationalErrors(char* buff, uint16_t seq, int bsRead)
-{
-	// Don't do more than one of these errors at a time!
+void generateRandomSituationalErrors(char *buff, uint16_t seq, int bsRead) {
+    // Don't do more than one of these errors at a time!
 
-	//10% of the time the packet will be out of order
-	if (!(packets_sent % 10)) {
-		//inserting sequence # into buffer
-		BreakINT16(buff, seq + rand() % 10 + 1);
+    //10% of the time the packet will be out of order
+    if (!(packets_sent % 10)) {
+        //inserting sequence # into buffer
+        BreakINT16(buff, seq + rand() % 10 + 1);
 
-		// If we mutate the sequence number, we still need a good CRC so recalculate it
-		uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
-		BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+        // If we mutate the sequence number, we still need a good CRC so recalculate it
+        uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
+        BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
 
-	} else if (!((packets_sent + rand() % 10 + 1) % 10)) {
-		//10% of the time we will send a bad crc
-		//inducing bad crc
-		uint32_t CRC = rand() % 10 + 1;
-		BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
-	} else if (!((packets_sent + rand() % 10 + 1) % 10)) {
-		//10% the packet will appear to be sent, but will be not actually be send/ it will be lost
-		simulateLost = true;
-	}
+    } else if (!((packets_sent + rand() % 10 + 1) % 10)) {
+        //10% of the time we will send a bad crc
+        //inducing bad crc
+        uint32_t CRC = rand() % 10 + 1;
+        BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+    } else if (!((packets_sent + rand() % 10 + 1) % 10)) {
+        //10% the packet will appear to be sent, but will be not actually be send/ it will be lost
+        simulateLost = true;
+    }
 }
 
 
@@ -473,7 +470,7 @@ void readPacketsFromFile(int nPacks) {
             if (lBytesRead == -1) error_and_exit(logFile, "Could not open file for reading");
 
             if (lBytesRead == 0) {
-				at_end_of_file = 1;
+                at_end_of_file = 1;
                 return;
             } else if (lBytesRead < packetSize) {
                 //We know we must have read the last bit of data
@@ -494,55 +491,54 @@ void readPacketsFromFile(int nPacks) {
 }
 
 void sendPackets(int nPacks, uint16_t startSN) {
-	// std::cout << "In sendPackets. nPacks : ";
-	// std::cout << nPacks;
-	// std::cout << std::endl;
+    // std::cout << "In sendPackets. nPacks : ";
+    // std::cout << nPacks;
+    // std::cout << std::endl;
 
     for (int i = 0; i < nPacks; i++) {
 
-		uint16_t tempSeq  = startSN + i;
-		tempSeq = tempSeq % rangeOfSequenceNumbers;
+        uint16_t tempSeq = startSN + i;
+        tempSeq = tempSeq % rangeOfSequenceNumbers;
 
-		int packIndex = getPacketIndexBySN(tempSeq);
+        int packIndex = getPacketIndexBySN(tempSeq);
 
         // int packIndex = getUnsentPacketIndex();
 
         // std::cout << "In sendPackets. packIndex : ";
-		// std::cout << packIndex;
-		// std::cout << std::endl;
+        // std::cout << packIndex;
+        // std::cout << std::endl;
 
         if ((packIndex > -1) && (packets[packIndex].getSent() == false)) {
 
 
-			// use a temporary buffer so original seq num doesn't get permanently changed when we are
-			// simulating errors.
-			bzero(buffer, MAX_BUF_SIZE);
-			memcpy(buffer, packets[packIndex].getBuffPoint(), packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
+            // use a temporary buffer so original seq num doesn't get permanently changed when we are
+            // simulating errors.
+            bzero(buffer, MAX_BUF_SIZE);
+            memcpy(buffer, packets[packIndex].getBuffPoint(), packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
 
-			if (situationalErrors == 1 && !at_end_of_file)
-			{
-				generateRandomSituationalErrors(buffer, packets[packIndex].getSN(), packets[packIndex].packet_bytes_read);
+            if (situationalErrors == 1 && !at_end_of_file) {
+                generateRandomSituationalErrors(buffer, packets[packIndex].getSN(),
+                                                packets[packIndex].packet_bytes_read);
 
-				// displayBuffer(std::cout, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
-			}
+                // displayBuffer(std::cout, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
+            }
 
-			if (simulateLost)
-			{
-				// Dont send
-				simulateLost = false;
-			} else
-			{
-				//sending now
-				sendto(sock, buffer,
+            if (simulateLost) {
+                // Dont send
+                simulateLost = false;
+            } else {
+                //sending now
+                sendto(sock, buffer,
                        packets[packIndex].packet_bytes_read + WRAPPER_SIZE, 0,
                        (const struct sockaddr *) &server, length);
-				totalBytesSent += packets[packIndex].packet_bytes_read + WRAPPER_SIZE;
+                totalBytesSent += packets[packIndex].packet_bytes_read + WRAPPER_SIZE;
 
-				DisplayPacketSendMess(packets[packIndex].getSN());
-				displayBuffer(std::cout, logFile, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
-				packets[packIndex].setSent(true);
-				// gotLastAck = false;
-			}
+                DisplayPacketSendMess(packets[packIndex].getSN());
+                displayBuffer(std::cout, logFile, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
+                displayEntirePacket(std::cout, logFile, &buffer[0], packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
+                packets[packIndex].setSent(true);
+                // gotLastAck = false;
+            }
 
             packets_sent++;
         }
@@ -626,7 +622,7 @@ void doDoneStuff() {
                              "");
     displayDoubleDataMessage(std::cout, logFile, "Effective throughput: ", (totalBytesRead * 8.0) / total_test_us, "");
 
-	displayMessage(std::cout, logFile, "");
+    displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");

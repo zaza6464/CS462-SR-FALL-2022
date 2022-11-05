@@ -8,7 +8,8 @@
 
 // first 2 indices of each packet are for the sequence number, so data starts at index 2
 #define START_DATA_INDEX 2
-#define WRAPPER_SIZE 4
+//wrapper size is the # of bytes of the sequence number + the crc
+#define WRAPPER_SIZE 6
 
 
 #include <iostream>

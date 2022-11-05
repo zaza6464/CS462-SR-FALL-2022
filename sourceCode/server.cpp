@@ -34,11 +34,11 @@ int crcError = 0;
 int numChecksumFailed = 0;
 int numOutOfSequence = 0;
 int numOriginalPackets = 0;
-int rangeOfSequenceNumbers = 100; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
+int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
-std::string ipAddress = "172.23.0.11"; //IP address of the target server
-int protocolType = 1; //0 for S&W, 1 for GBN, 2 for SR
-std::string filePath = "temp"; //path to file to be sent
+std::string ipAddress = "172.23.0.2"; //IP address of the target server
+int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
+std::string filePath = "bruhmoment"; //path to file to be sent
 int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
 int done = 0;
 int full_packet_size = 0;
@@ -47,7 +47,7 @@ uint16_t lastAckedSeqNum;
 uint16_t receivedSeqNum;
 char response_buff[MAX_BUF_SIZE];
 
-    
+
 std::ofstream fileOutputStream;
 std::ofstream logFile;
 
@@ -64,20 +64,23 @@ void doDoneStuff(void);
 
 int main(int argc, char *argv[]) {
 
-    ipAddress = ipAddressPrompt();
-    portNum = portNumPrompt();
-    protocolType = protocolTypePrompt();
-    filePath = filePathPrompt();
+    // create the CRC lookup table so we can use it later.
+    crcTableInit();
+
+    ipAddress = ipAddressPrompt(ipAddress);
+    portNum = portNumPrompt(portNum);
+    protocolType = protocolTypePrompt(protocolType);
+    filePath = filePathPrompt(filePath);
     if (protocolType != 0) {
-        slidingWindowSize = slidingWindowSizePrompt();
+        slidingWindowSize = slidingWindowSizePrompt(slidingWindowSize);
     } else {
         slidingWindowSize = 1;
     }
-    
+
     rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
-	situationalErrors = situationalErrorsPrompt();
-    
+	situationalErrors = situationalErrorsPrompt(situationalErrors);
+
     //create a stream to the log file
     logFile.open("output/server_log.log", std::ios_base::in | std::ios_base::app);
     if (!logFile.is_open()) {
@@ -122,7 +125,7 @@ int main(int argc, char *argv[]) {
     std::cout << std::endl;
 
     while (!done) {
-		
+
 		switch (protocolType) {
 			case 0:
 			case 1:
@@ -142,6 +145,7 @@ int main(int argc, char *argv[]) {
 
 void executeGBNProtocol(void)
 {
+
 	printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 	numCharsReceived = recvfrom(sock, buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &fromlen);
 	packets_received++;
@@ -175,8 +179,16 @@ void executeGBNProtocol(void)
 		//First we need to verify the checksum
 		//calculating and adding crc checksum
         // MAKE SURE THIS WORKS **********************************
-		crc rec_CRC = MakeINT32(&buffer[numCharsReceived - START_DATA_INDEX]);
-		crc calc_CRC = crcFun((uint8_t *) buffer, START_DATA_INDEX);
+		crc rec_CRC = MakeINT32(&buffer[numCharsReceived - CRCBYTES]);
+        if (DEBUGCRC) {
+            std::cout << "in server crc received is: " << rec_CRC << std::endl;
+            char myBuff[5];
+            BreakINT32(&myBuff[0], rec_CRC);
+            for (int i = 0; i < 4; i++) {
+                std::cout << "in server crc received as bytes: " << int(myBuff[i]) << std::endl;
+            }
+        }
+		crc calc_CRC = crcFun((uint8_t *) buffer, numCharsReceived - CRCBYTES);
 		if (calc_CRC == rec_CRC) {
 			displayMessage(std::cout, logFile, "Checksum OK");
 			crcError = 0;
@@ -204,11 +216,11 @@ void executeGBNProtocol(void)
 			}
 //                }
 			fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
-			
+
 			// std::cout << "WRITING TO FILE. receivedSeqNum: ";
 			// std::cout << receivedSeqNum;
 			// std::cout << std::endl;
-		
+
 			lastAckedSeqNum = sequenceNum;
 			numOriginalPackets++;
 			sequenceNum++;
@@ -265,13 +277,13 @@ void doDoneStuff(void)
 	std::cout << std::endl;
 	displayIntDataMessage(std::cout, logFile, "Number of retransmitted packets received: ", numOutOfSequence, "");
 	std::cout << std::endl;
-	
+
 	displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
     displayMessage(std::cout, logFile, "");
-    
+
 
 //                std::cout << "number of checksums that failed: ";
 //                std::cout << numChecksumFailed << std::endl;

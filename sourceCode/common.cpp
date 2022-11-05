@@ -14,93 +14,121 @@
 /* used for crc algorithm */
 #define CRCWIDTH (8 * sizeof(crc))
 #define CRCTOPBIT (1 << (CRCWIDTH - 1))
-`
-int slidingWindowSizePrompt() {
 
-    std::cout << "Size of sliding window: (Press Enter to accept default of " +  << std::endl;
+
+int slidingWindowSizePrompt(int defaultWinSize) {
+
+    std::cout << "Size of sliding window: (Press Enter to accept default of " << defaultWinSize << ")" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-    int winSize = std::stoi(responseString);
-    if (winSize <= 0) {
-        winSize = 5;
+    int winSize = 0;
+    if (responseString.length() <= 0) {
+        winSize = defaultWinSize;
+    } else {
+        winSize = std::stoi(responseString);
     }
     return winSize;
 
 }
 
-int situationalErrorsPrompt() {
+int situationalErrorsPrompt(int defaultSituationalErrors) {
 
     std::cout << "Situational errors; none (0), randomly generated (1), or user-specified (2):" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
 
-	int sitErr = std::stoi(responseString);
-	if (sitErr < 0 || sitErr > 2) {
-        sitErr = 0;
+    int situationalErrors;
+    if (responseString.length() <= 0) {
+        situationalErrors = defaultSituationalErrors;
+    } else {
+        situationalErrors = std::stoi(responseString);
     }
-    return sitErr;
+    return situationalErrors;
 
 }
 
 
-int portNumPrompt() {
+int portNumPrompt(int defaultPortNum) {
 
-    std::cout << "What is the port number:" << std::endl;
+    std::cout << "Port number: (Press Enter to accept default of " << defaultPortNum << ")" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-
-    return std::stoi(responseString);
-
+    int portNum = 0;
+    if (responseString.length() <= 0) {
+        portNum = defaultPortNum;
+    } else {
+        portNum = std::stoi(responseString);
+    }
+    return portNum;
 }
 
-std::string filePathPrompt() {
+std::string filePathPrompt(std::string defaultPath) {
 
-    std::cout << "What is the filepath for transfer:" << std::endl;
+    std::cout << "Path of file to be transferred: " << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-    return responseString;
+    std::string filePath;
+    if (responseString.length() <= 0) {
+        filePath = defaultPath;
+    } else {
+        filePath = responseString;
+    }
+    return filePath;
 
 }
 
-std::string ipAddressPrompt() {
+std::string ipAddressPrompt(std::string defaultIpAddress) {
 
-    std::cout << "What is the IP address of the other machine:" << std::endl;
+    std::cout << "IP Address of other instance: (Press Enter to accept default of " << defaultIpAddress << ")"
+              << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-
-    return responseString;
+    std::string ipAddress;
+    if (responseString.length() <= 0) {
+        ipAddress = defaultIpAddress;
+    } else {
+        ipAddress = responseString;
+    }
+    return ipAddress;
 
 }
 
-int protocolTypePrompt() {
+int protocolTypePrompt(int defaultProtocolType) {
 
     std::cout << "Type of protocol, S&W (0), GBN (1), or SR (2):" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
+    int protocolType;
+    if (responseString.length() <= 0) {
+        protocolType = defaultProtocolType;
+    } else {
+        protocolType = std::stoi(responseString);
+    }
 
-    return std::stoi(responseString);
+    return protocolType;
 
 }
 
-int packetSizePrompt() {
+int packetSizePrompt(int defaultPacketSize) {
 
-    std::cout << "Size of data packets:" << std::endl;
+    std::cout << "Packet size: (Press Enter to accept default of " << defaultPacketSize << ")" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-
-    int ps = std::stoi(responseString);
-
-    if (ps <= 0 || ps > (MAX_BUF_SIZE - 1000)) {
-        std::cout << "Packet Size invalid, setting size to 100" << std::endl;
-        ps = 100;
+    int packetSize;
+    if (responseString.length() <= 0) {
+        packetSize = defaultPacketSize;
+    } else {
+        packetSize = std::stoi(responseString);
     }
+    return packetSize;
+}
 
 //    if (ps < 100) {
 //        ps = 100;
@@ -110,38 +138,40 @@ int packetSizePrompt() {
 //        std::cout << "Setting Packet Size to buffer limit" << std::endl;
 //    }
 
-    return ps;
-
-}
-
 int timeoutIntervalPrompt() {
 
-    std::cout << "Timeout interval in microseconds (µs), user-specified or ping calculated (-1):" << std::endl;
+    std::cout << "Timeout interval in microseconds (µs); user-specified or press enter for ping calculated default:"
+              << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
 
-    int ti = std::stoi(responseString);
-    if (ti <= -1) {
-        return DEFAULT_TIMEOUT_US;
+    int timeout;
+    if (responseString.length() <= 0) {
+        timeout = DEFAULT_TIMEOUT_US;
     } else {
-        return std::stoi(responseString);
+        timeout = std::stoi(responseString);
     }
+    return timeout;
 }
 
-int rangeOfSequenceNumbersPrompt(int winSize) {
+int rangeOfSequenceNumbersPrompt(int defaultWinSize) {
 
-    std::cout << "Range of sequence numbers:" << std::endl;
+    std::cout << "Range of sequence numbers: (Press Enter to accept default of " << defaultWinSize << ")" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
-    int temp = std::stoi(responseString);
-
-    if (temp < ((winSize * 2) + 1)) {
-        std::cout << "Invalid range, setting to value compatible with window size" << std::endl;
-        temp = (winSize * 2) + 1;
+    int sequenceNumbers = 0;
+    if (responseString.length() == 0) {
+        sequenceNumbers = defaultWinSize;
+    } else {
+        sequenceNumbers = std::stoi(responseString);
+        if (sequenceNumbers < ((defaultWinSize * 2) + 1)) {
+            std::cout << "Invalid range, setting to value compatible with window size" << std::endl;
+            sequenceNumbers = (defaultWinSize * 2) + 1;
+        }
     }
-    return temp;
+    return sequenceNumbers;
 
 }
 
@@ -155,7 +185,8 @@ void displayIntDataMessage(std::ostream &console, std::ostream &log, std::string
     log << pre << data << post << std::endl;
 }
 
-void displayDoubleDataMessage(std::ostream &console, std::ostream &log, std::string pre, double data, std::string post) {
+void
+displayDoubleDataMessage(std::ostream &console, std::ostream &log, std::string pre, double data, std::string post) {
     console << pre << data << post << std::endl;
     log << pre << data << post << std::endl;
 }
@@ -163,6 +194,20 @@ void displayDoubleDataMessage(std::ostream &console, std::ostream &log, std::str
 
 void displayBuffer(std::ostream &console, std::ostream &log, char *buf, int num_bytes) {
 #if SHOW_BUFFER
+    console << "buffer: ";
+    log << "buffer: ";
+    // write(1, buf, num_bytes);
+    for (int i = 0; i < num_bytes; i++) {
+        console << buf[i];
+        log << buf[i];
+    }
+    console << std::endl;
+    log << std::endl;
+#endif
+}
+
+void displayEntirePacket(std::ostream &console, std::ostream &log, char *buf, int num_bytes) {
+#if SHOW_ENTIRE_PACKET
     console << "buffer: ";
     log << "buffer: ";
     // write(1, buf, num_bytes);
@@ -228,13 +273,19 @@ void crcTableInit() {
         // division, bit by bit
         for (bit = 8; bit > 0; --bit) {
             if (remainder & CRCTOPBIT) { // current bit divides
-                remainder = remainder << 1 ^ POLYNOMIAL;
+                remainder = (remainder << 1) ^ POLYNOMIAL;
             } else {                     // current bit doesn't divide
                 remainder = (remainder << 1);
             }
         }
 
         crcTable[dividend] = remainder;
+    }
+    if(DEBUGCRC){
+    for (int i = 0; i < 64; ++i) {
+        std::cout << std::hex << crcTable[i * 4] << ", " << std::hex << crcTable[i * 4 + 1] << ", " << std::hex
+                  << crcTable[i * 4 + 2] << ", " << std::hex << crcTable[i * 4 + 3] << ", " << std::endl;
+    }
     }
 } /* crcTableInit() */
 
@@ -251,8 +302,16 @@ crc crcFun(unsigned char const message[], int nBytes) {
         remainder = crcTable[data] ^ (remainder << 8);
     }
 
+    if (DEBUGCRC) {
+        std::cout << "crcFun returning: " << remainder << std::endl;
+        char myBuff[5];
+        BreakINT32(&myBuff[0], remainder);
+        for (int i = 0; i < 4; i++) {
+            std::cout << "crcFun returning as bytes: " << int(myBuff[i]) << std::endl;
+        }
+    }
 // the remainder is the crc
-    return remainder; 
+    return remainder;
 
 } /* crcFun() */
 
@@ -326,30 +385,30 @@ uint16_t crc16(uint8_t *data, int len) {
 /* creates a 16 bit value from the first 2 indices of the array */
 int16_t MakeINT16(char buff[]) {
     return (
-            (((int16_t) buff[0])       & 0x00FF) |
-            (((int16_t) buff[1] << 8)  & 0xFF00)
-            );
+            (((int16_t) buff[0]) & 0x00FF) |
+            (((int16_t) buff[1] << 8) & 0xFF00)
+    );
 }
 
 /* takes a 16 bit value and stores it in the first 2 indices of the array */
 void BreakINT16(char buff[], int16_t i) {
-    buff[0] = (char)  (i & 0x00FF);
+    buff[0] = (char) (i & 0x00FF);
     buff[1] = (char) ((i & 0xFF00) >> 8);
 }
 
 /* creates a 32 bit value from the first 4 indices of the array */
 int32_t MakeINT32(char buff[]) {
     return (
-            (((int32_t) buff[0])       & 0x000000FF) |
-            (((int32_t) buff[1] << 8)  & 0x0000FF00) |
+            (((int32_t) buff[0]) & 0x000000FF) |
+            (((int32_t) buff[1] << 8) & 0x0000FF00) |
             (((int32_t) buff[2] << 16) & 0x00FF0000) |
-            (((int32_t) buff[3] << 24) & 0xFF000000) 
-            );
+            (((int32_t) buff[3] << 24) & 0xFF000000)
+    );
 }
 
 /* takes a 32 bit value and stores it in the first 4 indices of the array  */
 void BreakINT32(char buff[], int32_t i) {
-    buff[0] = (char)  (i & 0x000000FF);
+    buff[0] = (char) (i & 0x000000FF);
     buff[1] = (char) ((i & 0x0000FF00) >> 8);
     buff[2] = (char) ((i & 0x00FF0000) >> 16);
     buff[3] = (char) ((i & 0xFF000000) >> 24);
