@@ -23,8 +23,8 @@
 #include <string>
 #include <fstream>
 #include <chrono>
-#include "client.h"
-#include "common.h"
+#include "Kamke_Kranich_Mahan_client.h"
+#include "Kamke_Kranich_Mahan_common.h"
 #include "Kamke_Kranich_Mahan_packet_struct.h"
 
 
