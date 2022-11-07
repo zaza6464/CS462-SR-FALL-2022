@@ -6,12 +6,6 @@ UWECID=mahano0661
 
 # Change only if you're working directory in Poseidon is different
 POSEIDONWD=CS462/
-# If you are working locally with WSL, you may want to change 
-# PATHTOBACKUP to 
-#     a subdirectory of /mnt/c/Users/YOURID/Desktop/
-# replacing YOURID
-PATHTOBACKUP=.
-WORKINGDIR=`pwd`
 
 SERVER=server
 CLIENT=client
