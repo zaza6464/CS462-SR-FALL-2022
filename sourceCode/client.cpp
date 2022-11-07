@@ -22,14 +22,17 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <chrono>
 #include "client.h"
 #include "common.h"
 #include "packet_struct.h"
 
-clock_t start_test_ticks;
-clock_t end_test_ticks;
+
+std::chrono::steady_clock::time_point start_test_ticks;
+std::chrono::steady_clock::time_point end_test_ticks;
 clock_t start_packet_ticks;
 clock_t end_packet_ticks;
+time_t myTime;
 std::ofstream logFile;
 //create ifstream object
 std::ifstream fileInputStream;
@@ -51,19 +54,19 @@ int retransmittedPackets = 0;
 long int totalBytesRead = 0;
 long int totalBytesSent = 0;
 unsigned int length;
-struct sockaddr_in server;
+struct sockaddr_in client;
 struct sockaddr_in from;
 struct hostent *hp;
 // Get a large buffer to read file data into
 char buffer[MAX_BUF_SIZE];
 char rec_buffer[MAX_BUF_SIZE];
 // User supplied variables
-std::string filePath = "/data/users/kranicac1696/src/bruhmoment.txt"; //path to file to be sent
+std::string filePath = "/data/users/kranicac1696/src/1M"; //path to file to be sent
 std::string ipAddress = "172.23.0.3"; //IP address of the target server
 int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
-int packetSize = 10; //specified size of packets to be sent
+int packetSize = 100; //specified size of packets to be sent
 int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
 int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
@@ -72,7 +75,7 @@ int numPacketsToRead = slidingWindowSize;
 int at_end_of_file = 0;
 bool simulateLost = false;
 bool gotLastAck = false;
-char test[12] = {0,0,'t','h','i','s',' ','i','s',' ','a','n'};
+//char test[12] = {0,0,'t','h','i','s',' ','i','s',' ','a','n'};
 
 packetClass packets[MAX_WINDOW_SIZE];
 
@@ -136,17 +139,19 @@ int main(int argc, char *argv[]) {
 
 
     // First, just make sure we can create the socket
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    //sock = socket(AF_INET, SOCK_DGRAM, 0);
+    sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) error_and_exit(logFile, "Exit, failed to create socket.");
+    bzero(&client, sizeof(client));
 
     // Next, check that we can "see" the host ipaddress (by name or ipv4 xxx.xxx.xxx.xxx numbers)
-    server.sin_family = AF_INET;
+    client.sin_family = AF_INET;
     hp = gethostbyname(ipAddress.c_str());
     if (hp == 0) error_and_exit(logFile, "Exit, Couldn't find Server/Host");
 
     // Set the port number the server is expecting data on.
-    bcopy((char *) hp->h_addr, (char *) &server.sin_addr, hp->h_length);
-    server.sin_port = htons(portNum);
+    bcopy((char *) hp->h_addr, (char *) &client.sin_addr, hp->h_length);
+    client.sin_port = htons(portNum);
 
     length = sizeof(struct sockaddr_in);
 
@@ -155,13 +160,23 @@ int main(int argc, char *argv[]) {
     tv.tv_usec = timeoutIntervalus;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof tv);
 
+    if(connect(sock, (struct sockaddr*)&client, sizeof(client)) != 0){
+        error_and_exit(logFile, "Connection with server failed, exiting client");
+    }
     // For testing, get user input and store it in the buffer.
     //printf("Enter a string to send to the server for testing:\r\n");
     //bzero(buffer, 256);
     //fgets(buffer, 255, stdin);
 
 
+    start_test_ticks = std::chrono::steady_clock::now();
+
+
+    myTime = time(NULL);
+
+
     displayMessage(std::cout, logFile, "******************** START OF NEW TEST ********************");
+    displayMessage(std::cout, logFile, ctime(&myTime));
     if (protocolType == 0) {
         displayMessage(std::cout, logFile, "Protocol Type: Stop and Wait");
     } else if (protocolType == 1) {
@@ -181,8 +196,7 @@ int main(int argc, char *argv[]) {
         displayMessage(std::cout, logFile, "Situational Errors: User Generated");
     }
 
-    //grabbing system ticks at start of test
-    start_test_ticks = clock();
+
 
     while (!at_end_of_file || !gotLastAck) {
         // while (!at_end_of_file) {
@@ -326,9 +340,10 @@ void executeGBNProtocol(void) {
     //waiting for response
     num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
 
-    displayIntDataMessage(std::cout, logFile, "numbytes:", num_bytes, "");
+    //displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
     if (num_bytes <= 0) {
         //WE TIMED OUT!!!!!!!!
+        //crcTableInit();
         DisplayPacketTimedout(sequenceNum);
         setMarkForRetransmit(sequenceNum, slidingWindowSize);
 
@@ -530,7 +545,8 @@ void sendPackets(int nPacks, uint16_t startSN) {
                 //sending now
                 sendto(sock, buffer,
                        packets[packIndex].packet_bytes_read + WRAPPER_SIZE, 0,
-                       (const struct sockaddr *) &server, length);
+                       (const struct sockaddr *) &client, length);
+                //write(sock, buffer,packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
                 totalBytesSent += packets[packIndex].packet_bytes_read + WRAPPER_SIZE;
 
                 DisplayPacketSendMess(packets[packIndex].getSN());
@@ -598,16 +614,21 @@ void doDoneStuff() {
     uint32_t CRC = crcFun((uint8_t *) buffer, START_DATA_INDEX);
     BreakINT32(&buffer[START_DATA_INDEX], CRC);
     sendto(sock, buffer,
-           WRAPPER_SIZE, 0, (const struct sockaddr *) &server, length);
+           WRAPPER_SIZE, 0, (const struct sockaddr *) &client, length);
 
     // Close socket, inputstream, and exit
     fileInputStream.close();
     close(sock);
 
-    //grabbing system ticks at end of test
-    end_test_ticks = clock();
+    end_test_ticks = std::chrono::steady_clock::now();
 
-    clock_t total_test_us = (end_test_ticks - start_test_ticks);
+
+    myTime = time(NULL);
+    // ctime() used to give the present time
+
+    displayMessage(std::cout, logFile, ctime(&myTime));
+
+    double total_test_us = std::chrono::duration_cast<std::chrono::microseconds>(end_test_ticks - start_test_ticks).count();
 
     displayMessage(std::cout, logFile, "Session Successfully terminated");
     std::cout << std::endl;

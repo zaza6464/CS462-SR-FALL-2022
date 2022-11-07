@@ -11,8 +11,9 @@
 #define SHOW_BUFFER 0
 #define SHOW_ENTIRE_PACKET 0
 #define MAX_WINDOW_SIZE 25
-#define DEFAULT_TIMEOUT_US 1000
-#define MAX_BUF_SIZE 11000 // may need to change this if we don't have room for the crc
+#define DEFAULT_TIMEOUT_US 500000
+#define MAX_PACKET_SIZE 10000
+#define MAX_BUF_SIZE (MAX_PACKET_SIZE * 5) // may need to change this if we don't have room for the crc
                            // (since it takes up 4 indices instead of 2 now)
 #define DEBUGCRC 0
 

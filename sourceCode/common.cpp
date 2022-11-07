@@ -16,6 +16,9 @@
 #define CRCTOPBIT (1 << (CRCWIDTH - 1))
 
 
+crc crcTable[256];
+
+
 int slidingWindowSizePrompt(int defaultWinSize) {
 
     std::cout << "Size of sliding window: (Press Enter to accept default of " << defaultWinSize << ")" << std::endl;
@@ -117,7 +120,8 @@ int protocolTypePrompt(int defaultProtocolType) {
 
 int packetSizePrompt(int defaultPacketSize) {
 
-    std::cout << "Packet size: (Press Enter to accept default of " << defaultPacketSize << ")" << std::endl;
+    std::cout << "Packet size (Max of " << MAX_PACKET_SIZE << " bytes: (Press Enter to accept default of "
+              << defaultPacketSize << ")" << std::endl;
 
     std::string responseString;
     std::getline(std::cin, responseString);
@@ -126,6 +130,9 @@ int packetSizePrompt(int defaultPacketSize) {
         packetSize = defaultPacketSize;
     } else {
         packetSize = std::stoi(responseString);
+        if (packetSize > MAX_PACKET_SIZE) {
+            packetSize = MAX_PACKET_SIZE;
+        }
     }
     return packetSize;
 }
@@ -166,10 +173,10 @@ int rangeOfSequenceNumbersPrompt(int defaultWinSize) {
         sequenceNumbers = defaultWinSize;
     } else {
         sequenceNumbers = std::stoi(responseString);
-        if (sequenceNumbers < ((defaultWinSize * 2) + 1)) {
-            std::cout << "Invalid range, setting to value compatible with window size" << std::endl;
-            sequenceNumbers = (defaultWinSize * 2) + 1;
-        }
+    }
+    if (sequenceNumbers < ((defaultWinSize * 2) + 1)) {
+        std::cout << "Invalid range, setting to value compatible with window size" << std::endl;
+        sequenceNumbers = (defaultWinSize * 2) + 1;
     }
     return sequenceNumbers;
 
@@ -254,8 +261,6 @@ char *GetTimeStamp(char *timeStamp) {
 }
 
 
-crc crcTable[256];
-
 /* crcTableInit() creates the crc lookup table.
  * Only needs to be run once.
  */
@@ -281,11 +286,11 @@ void crcTableInit() {
 
         crcTable[dividend] = remainder;
     }
-    if(DEBUGCRC){
-    for (int i = 0; i < 64; ++i) {
-        std::cout << std::hex << crcTable[i * 4] << ", " << std::hex << crcTable[i * 4 + 1] << ", " << std::hex
-                  << crcTable[i * 4 + 2] << ", " << std::hex << crcTable[i * 4 + 3] << ", " << std::endl;
-    }
+    if (DEBUGCRC) {
+        for (int i = 0; i < 64; ++i) {
+            std::cout << std::hex << crcTable[i * 4] << ", " << std::hex << crcTable[i * 4 + 1] << ", " << std::hex
+                      << crcTable[i * 4 + 2] << ", " << std::hex << crcTable[i * 4 + 3] << ", " << std::endl;
+        }
     }
 } /* crcTableInit() */
 
