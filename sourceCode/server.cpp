@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     situationalErrors = situationalErrorsPrompt(situationalErrors);
 
     //create a stream to the log file
-    logFile.open("output/server_log.log", std::ios_base::in | std::ios_base::app);
+    logFile.open("server_log.log", std::ios_base::in | std::ios_base::app);
     if (!logFile.is_open()) {
         error_and_exit(logFile, "Log file not opened successfully!!");
     }

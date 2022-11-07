@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
 
     //create a stream to the log file
 
-    logFile.open("output/client_log.log", std::ios_base::in | std::ios_base::app);
+    logFile.open("client_log.log", std::ios_base::in | std::ios_base::app);
     if (!logFile.is_open()) {
         error_and_exit(logFile, "Log file not opened successfully!!");
     }
