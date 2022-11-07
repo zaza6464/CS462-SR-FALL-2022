@@ -17,3 +17,8 @@ After compiling run ./server.out on one window and ./client.out on the other
 enter the corresponding IP adresses, pick a port that will be the same for both, and enter your desired parameters.
 
 Have fun!
+
+NEW RUNNING INSTRUCTIONS:
+make sure makefile is in the same folder as your source code,
+then type 'make client' or 'make server' to compile the code and then 
+'run_client' or 'run_server' depending on which you want to run.
