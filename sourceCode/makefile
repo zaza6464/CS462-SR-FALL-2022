@@ -13,13 +13,13 @@ CLIENT=client
 G++_FLAGS=-std=c++11
 
 all: server client
-server: server.cpp common.h packet_struct.h
-	g++ ${G++_FLAGS} -o server.out server.cpp common.cpp
-client: server.cpp client.h common.h packet_struct.h
-	g++ ${G++_FLAGS} -o client.out client.cpp common.cpp
+server: Kamke_Kranich_Mahan_server.cpp Kamke_Kranich_Mahan_common.h Kamke_Kranich_Mahan_packet_struct.h
+	g++ ${G++_FLAGS} -o Kamke_Kranich_Mahan_server.out Kamke_Kranich_Mahan_server.cpp Kamke_Kranich_Mahan_common.cpp
+client: Kamke_Kranich_Mahan_server.cpp Kamke_Kranich_Mahan_client.h Kamke_Kranich_Mahan_common.h Kamke_Kranich_Mahan_packet_struct.h
+	g++ ${G++_FLAGS} -o Kamke_Kranich_Mahan_client.out Kamke_Kranich_Mahan_client.cpp Kamke_Kranich_Mahan_common.cpp
 clean:
-	if [ -f server.out ]; then rm server.out; fi
-	if [ -f client.out ]; then rm client.out; fi
+	if [ -f Kamke_Kranich_Mahan_server.out ]; then rm server.out; fi
+	if [ -f Kamke_Kranich_Mahan_client.out ]; then rm client.out; fi
 to_poseidon:
 	scp *.[hc++] makefile ${UWECID}@poseidon0.cs.uwec.edu:/USERS/ALL/${UWECID}/${POSEIDONWD}
 from_poseidon:

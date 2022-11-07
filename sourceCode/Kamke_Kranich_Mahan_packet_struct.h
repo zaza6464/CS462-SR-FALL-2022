@@ -1,5 +1,5 @@
 /* */
-/* Filename : packet_struct.h */
+/* Filename : Kamke_Kranich_Mahan_packet_struct.h */
 /* Team :  */
 /* */
 
@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include "common.h"
+#include "Kamke_Kranich_Mahan_common.h"
 
 class packetClass {
 public:

@@ -6,7 +6,7 @@
 /* */
 /* Complile with this command: g++ -o server.out server.cpp common.cpp -std=c++11 */
 /* */
-/* Filename : server.cpp */
+/* Filename : Kamke_Kranich_Mahan_server.cpp */
 /* Team :  */
 /* */
 
@@ -22,7 +22,7 @@
 #include <string>
 #include <fstream>
 #include "common.h"
-#include "packet_struct.h"
+#include "Kamke_Kranich_Mahan_packet_struct.h"
 
 
 int sock;
