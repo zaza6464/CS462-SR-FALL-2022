@@ -6,7 +6,7 @@
 /* */
 /* Complile with this command: g++ -o client.out client.cpp common.cpp -std=c++11 */
 /* */
-/* Filename : client.cpp */
+/* Filename : Kamke_Kranich_Mahan_client.cpp */
 /* Team :  */
 /* */
 
@@ -23,9 +23,9 @@
 #include <string>
 #include <fstream>
 #include <chrono>
-#include "client.h"
-#include "common.h"
-#include "packet_struct.h"
+#include "Kamke_Kranich_Mahan_client.h"
+#include "Kamke_Kranich_Mahan_common.h"
+#include "Kamke_Kranich_Mahan_packet_struct.h"
 
 
 std::chrono::steady_clock::time_point start_test_ticks;

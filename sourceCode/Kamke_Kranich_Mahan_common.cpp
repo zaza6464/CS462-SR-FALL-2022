@@ -1,5 +1,5 @@
 /* */
-/* Filename : common.cpp */
+/* Filename : Kamke_Kranich_Mahan_common.cpp */
 /* Team :  */
 /* */
 
@@ -8,7 +8,7 @@
 #include <iostream>
 #include <time.h>
 
-#include "common.h"
+#include "Kamke_Kranich_Mahan_common.h"
 
 
 /* used for crc algorithm */
