@@ -7,7 +7,7 @@
 /* Complile with this command: g++ -o client.out client.cpp common.cpp -std=c++11 */
 /* */
 /* Filename : client.cpp */
-/* Team :  */
+/* Team :  Kranich*/
 /* */
 
 #include <sys/types.h>
