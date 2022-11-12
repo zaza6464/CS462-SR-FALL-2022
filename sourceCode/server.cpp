@@ -39,7 +39,7 @@ int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2,
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
 std::string ipAddress = "172.23.0.2"; //IP address of the target server
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
-std::string filePath = "43mb"; //path to file to be sent
+std::string filePath = "test"; //path to file to be sent
 int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
 int done = 0;
 int packetSize = 100; //specified size of packets to be sent
@@ -47,7 +47,10 @@ int full_packet_size = 0;
 uint16_t sequenceNum = 0;
 uint16_t lastAckedSeqNum;
 uint16_t receivedSeqNum;
+uint16_t baseSeqNum = 0; //This is the sequence number at the start of the window
 char response_buff[MAX_BUF_SIZE];
+
+packetClass packets[MAX_WINDOW_SIZE];
 
 
 std::ofstream fileOutputStream;
@@ -72,20 +75,20 @@ int main(int argc, char *argv[]) {
     // create the CRC lookup table so we can use it later.
     crcTableInit();
 
-    ipAddress = ipAddressPrompt(ipAddress);
-    portNum = portNumPrompt(portNum);
+    //ipAddress = ipAddressPrompt(ipAddress);
+    //portNum = portNumPrompt(portNum);
     packetSize = packetSizePrompt(packetSize);
     protocolType = protocolTypePrompt(protocolType);
-    filePath = filePathPrompt(filePath);
     if (protocolType != 0) {
         slidingWindowSize = slidingWindowSizePrompt(slidingWindowSize);
     } else {
         slidingWindowSize = 1;
     }
 
-    rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
+    filePath = filePathPrompt(filePath);
+    //rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
-    situationalErrors = situationalErrorsPrompt(situationalErrors);
+    //situationalErrors = situationalErrorsPrompt(situationalErrors);
 
     //create a stream to the log file
     logFile.open("output/server_log.log", std::ios_base::in | std::ios_base::app);
@@ -131,9 +134,9 @@ int main(int argc, char *argv[]) {
     std::cout << "past listen";
     fromlen = sizeof(struct sockaddr_in);
 
-    connsock = accept(sock, (struct sockaddr*)&from, &fromlen);
+    connsock = accept(sock, (struct sockaddr *) &from, &fromlen);
     std::cout << "past accept";
-    if(connsock < 0){
+    if (connsock < 0) {
         error_and_exit(logFile, "Accept failed, exiting server");
     }
 
@@ -141,8 +144,6 @@ int main(int argc, char *argv[]) {
     if (!fileOutputStream.is_open()) {
         error_and_exit(logFile, "Write file not opened successfully!!");
     }
-
-
 
 
     while (!done) {
@@ -168,12 +169,141 @@ int main(int argc, char *argv[]) {
 
 void executeGBNProtocol(void) {
 
+//    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+//    numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from, &fromlen);
+//    memcpy(buffer, readBuffer, numCharsReceived);
+//    //numCharsReceived = read(connsock, buffer, MAX_BUF_SIZE);
+//
+//    if(numCharsReceived <= 0){
+//        error_and_exit(logFile, "Read error, exiting server");
+//    }
+//    packets_received++;
+//    uint16_t tempSeqNum = MakeINT16(buffer);
+//
+//
+//    if (numCharsReceived < 0) {
+//        error_and_exit(logFile, "recvfrom Error");
+//    } else if (numCharsReceived > 0) {
+//
+//        if (packets_received == 1) {
+//            full_packet_size = numCharsReceived;
+//        }
+//
+//        //This is a special thing to know we are done so server doesn't hang
+//        if (tempSeqNum == 30000) {
+//            // fileOutputStream.close();
+//            // error_and_exit(logFile, "Test Completion");
+//            doDoneStuff();
+//            return;
+//        } else {
+//            receivedSeqNum = tempSeqNum;
+//        }
+//
+//
+//        displayIntDataMessage(std::cout, logFile, "Packet ", receivedSeqNum, " received");
+//        displayBuffer(std::cout, logFile, &buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
+//
+//
+//        //First we need to verify the checksum
+//        //calculating and adding crc checksum
+//        // MAKE SURE THIS WORKS **********************************
+//        crc rec_CRC = MakeINT32(&buffer[numCharsReceived - CRCBYTES]);
+//        if (DEBUGCRC) {
+//            std::cout << "in server crc received is: " << rec_CRC << std::endl;
+//            char myBuff[5];
+//            BreakINT32(&myBuff[0], rec_CRC);
+//            for (int i = 0; i < 4; i++) {
+//                std::cout << "in server crc received as bytes: " << int(myBuff[i]) << std::endl;
+//            }
+//        }
+//        crc calc_CRC = crcFun((uint8_t *) buffer, numCharsReceived - CRCBYTES);
+//        //displayIntDataMessage(std::cout, logFile, "Calculated CRC: ", calc_CRC, "");
+//        //displayIntDataMessage(std::cout, logFile, "Sent CRC: ", rec_CRC, "");
+//        if (calc_CRC == rec_CRC) {
+//            displayMessage(std::cout, logFile, "Checksum OK");
+//            crcError = 0;
+//        } else {
+//            //displayMessage(std::cout, logFile,"Checksum failed. Bytes read: ");
+//            displayIntDataMessage(std::cout, logFile, "Checksum failed. Bytes read: ", numCharsReceived, "");
+//            //crcTableInit();
+//
+//            crcError = 1;
+//            numChecksumFailed++;
+//        }
+//    }
+//
+//
+//    if (!crcError) {
+//        if (receivedSeqNum == sequenceNum) {
+//            //this is if we got the expected sequence number in order
+//            //we will write and ack
+//
+//            //10% the ack won't be sent
+////                if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
+//            BreakINT16(response_buff, receivedSeqNum);
+//            response_buff[START_DATA_INDEX] = (char) ACK;
+//            numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
+//                             0, (struct sockaddr *) &from, fromlen);
+//            if (numSent < 0) {
+//                error_and_exit(logFile, "sendto Error");
+//            }
+////                }
+//            fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
+//
+//            // std::cout << "WRITING TO FILE. receivedSeqNum: ";
+//            // std::cout << receivedSeqNum;
+//            // std::cout << std::endl;
+//
+//            lastAckedSeqNum = sequenceNum;
+//            numOriginalPackets++;
+//            sequenceNum++;
+//            sequenceNum = sequenceNum % rangeOfSequenceNumbers;
+//            displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
+//            std::cout << std::endl;
+//        } else if (receivedSeqNum < sequenceNum) {
+//            //this is if we already acked and saved this packet
+//            //we will ack it again and not save
+//            /*
+//            BreakINT16(response_buff, lastAckedSeqNum);
+//            response_buff[START_DATA_INDEX] = (char) ACK;
+//            numSent = sendto(sock, response_buff, START_DATA_INDEX + 1,
+//                             0, (struct sockaddr *) &from, fromlen);
+//            if (numSent < 0) {
+//                error_and_exit(logFile, "sendto Error");
+//            }
+//            displayIntDataMessage(std::cout, logFile, "Ack ", lastAckedSeqNum , " sent");
+//            std::cout << std::endl;
+//            */
+//            numOutOfSequence++;
+//        } else if (receivedSeqNum > sequenceNum && sequenceNum > 0) {
+////                //we can't accept this packet because a previous packet hasn't came yet
+////                //for stop and wait we need to send an acknowledgement for the last packet we saved
+////                BreakINT16(response_buff, sequenceNum - 1);
+////                response_buff[START_DATA_INDEX] = (char) ACK;
+////                numSent = sendto(sock, response_buff, START_DATA_INDEX + 1,
+////                                 0, (struct sockaddr *) &from, fromlen);
+////                if (numSent < 0) {
+////                    error_and_exit(logFile, "sendto");
+////                }
+////                std::cout << "Ack ";
+////                std::cout << sequenceNum - 1;
+////                std::cout << " sent" << std::endl;
+//            numOutOfSequence++;
+//        }
+//
+//        if (numCharsReceived > 0 && numCharsReceived != full_packet_size) {
+//            // doDoneStuff();
+//        }
+//    }
+}
+
+void executeSRProtocol(void) {
     printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
-    numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from, &fromlen);
+    numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from,
+                                &fromlen);
     memcpy(buffer, readBuffer, numCharsReceived);
     //numCharsReceived = read(connsock, buffer, MAX_BUF_SIZE);
-
-    if(numCharsReceived <= 0){
+    if (numCharsReceived <= 0) {
         error_and_exit(logFile, "Read error, exiting server");
     }
     packets_received++;
@@ -233,32 +363,48 @@ void executeGBNProtocol(void) {
 
 
     if (!crcError) {
-        if (receivedSeqNum == sequenceNum) {
-            //this is if we got the expected sequence number in order
-            //we will write and ack
+        int slideFactor = isInSlidingWindow(baseSeqNum, receivedSeqNum, slidingWindowSize, rangeOfSequenceNumbers);
+        if (slideFactor > 0) {
+            if (receivedSeqNum == baseSeqNum) {
+                //this is if we got the expected sequence number in order
+                //we will write and ack
 
-            //10% the ack won't be sent
-//                if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
-            BreakINT16(response_buff, receivedSeqNum);
-            response_buff[START_DATA_INDEX] = (char) ACK;
-            numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
-                             0, (struct sockaddr *) &from, fromlen);
-            if (numSent < 0) {
-                error_and_exit(logFile, "sendto Error");
+                //10% the ack won't be sent
+                //if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
+                BreakINT16(response_buff, receivedSeqNum);
+                response_buff[START_DATA_INDEX] = (char) ACK;
+                numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
+                                 0, (struct sockaddr *) &from, fromlen);
+                if (numSent < 0) {
+                    error_and_exit(logFile, "sendto Error");
+                }
+                //}
+                fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
+
+                // std::cout << "WRITING TO FILE. receivedSeqNum: ";
+                // std::cout << receivedSeqNum;
+                // std::cout << std::endl;
+
+                lastAckedSeqNum = baseSeqNum;
+                numOriginalPackets++;
+                baseSeqNum++;
+                baseSeqNum = baseSeqNum % rangeOfSequenceNumbers;
+                displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
+                std::cout << std::endl;
+            }else{
+                packets[slideFactor - 1].loadPacket(receivedSeqNum, numCharsReceived, buffer);
+
+                BreakINT16(response_buff, receivedSeqNum);
+                response_buff[START_DATA_INDEX] = (char) ACK;
+                numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
+                                 0, (struct sockaddr *) &from, fromlen);
+                if (numSent < 0) {
+                    error_and_exit(logFile, "sendto Error");
+                }
+
+                fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
             }
-//                }
-            fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
 
-            // std::cout << "WRITING TO FILE. receivedSeqNum: ";
-            // std::cout << receivedSeqNum;
-            // std::cout << std::endl;
-
-            lastAckedSeqNum = sequenceNum;
-            numOriginalPackets++;
-            sequenceNum++;
-            sequenceNum = sequenceNum % rangeOfSequenceNumbers;
-            displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
-            std::cout << std::endl;
         } else if (receivedSeqNum < sequenceNum) {
             //this is if we already acked and saved this packet
             //we will ack it again and not save
@@ -294,10 +440,6 @@ void executeGBNProtocol(void) {
             // doDoneStuff();
         }
     }
-}
-
-void executeSRProtocol(void) {
-    executeGBNProtocol();
 }
 
 void doDoneStuff(void) {

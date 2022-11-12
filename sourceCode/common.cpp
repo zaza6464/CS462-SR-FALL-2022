@@ -182,6 +182,15 @@ int rangeOfSequenceNumbersPrompt(int defaultWinSize) {
 
 }
 
+int isInSlidingWindow(uint16_t sn, uint16_t recsn, int slidingWindowSize, int rangeOfSequenceNumbers) {
+    for (int i = 0; i < slidingWindowSize; i++) {
+        if (recsn == (sn + i) % rangeOfSequenceNumbers) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
 void displayMessage(std::ostream &console, std::ostream &log, std::string mess) {
     console << mess << std::endl;
     log << mess << std::endl;

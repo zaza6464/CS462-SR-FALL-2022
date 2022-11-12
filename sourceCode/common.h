@@ -11,7 +11,7 @@
 #define SHOW_BUFFER 0
 #define SHOW_ENTIRE_PACKET 0
 #define MAX_WINDOW_SIZE 25
-#define DEFAULT_TIMEOUT_US 500000
+#define DEFAULT_TIMEOUT_US 300000
 #define MAX_PACKET_SIZE 10000
 #define MAX_BUF_SIZE (MAX_PACKET_SIZE * 5) // may need to change this if we don't have room for the crc
                            // (since it takes up 4 indices instead of 2 now)
@@ -48,6 +48,7 @@ int protocolTypePrompt(int defaultProtocol);
 int packetSizePrompt(int defaultPacketSize);
 int timeoutIntervalPrompt();
 int rangeOfSequenceNumbersPrompt(int defaultWinSize);
+int isInSlidingWindow(uint16_t, uint16_t, int slidingWindowSize, int rangeOfSequenceNumbers);
 
 // display/log output
 void displayMessage(std::ostream& console, std::ostream& log, std::string mess);

@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Selective Repeat.iml" filepath="$PROJECT_DIR$/.idea/Selective Repeat.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/SelectiveRepeat.iml" filepath="$PROJECT_DIR$/.idea/SelectiveRepeat.iml" />
     </modules>
   </component>
 </project>

@@ -22,13 +22,15 @@ void executeSRProtocol(void);
 
 void generateRandomSituationalErrors(char* buff, uint16_t seq, int bsRead);
 	
-void setMarkForRetransmit(uint16_t seq, int numPackets);		
+void setMarkForRetransmit(uint16_t seq, int numPackets);
+void setSinglePacketForRetransmit(uint16_t seq);
+void checkAllPacketsForTimeout();
 void doDoneStuff();
 void readPacketsFromFile(int);
-void sendPackets(int, uint16_t startSN);
+bool sendPackets(int, uint16_t startSN);
 int getPacketIndexBySN(uint16_t);
 void slideWindow(int, uint16_t);
-int isInSlidingWindow(uint16_t, uint16_t);
+
 
 void DisplayPacketSendMess(int packetNum);
 void DisplayPacketRetransMess(int packetNum);

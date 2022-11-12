@@ -15,6 +15,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -89,10 +90,10 @@ int main(int argc, char *argv[]) {
 
 
     //prompt user for each of the following fields
-    ipAddress = ipAddressPrompt(ipAddress);
-    portNum = portNumPrompt(portNum);
+    //ipAddress = ipAddressPrompt(ipAddress);
+    //portNum = portNumPrompt(portNum);
     packetSize = packetSizePrompt(packetSize);
-    timeoutIntervalus = timeoutIntervalPrompt();
+    //timeoutIntervalus = timeoutIntervalPrompt();
 
     protocolType = protocolTypePrompt(protocolType);
 
@@ -101,13 +102,13 @@ int main(int argc, char *argv[]) {
     } else {
         slidingWindowSize = 1;
     }
+    numPacketsToRead = slidingWindowSize;
+    //rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
-    rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
+    //situationalErrors = situationalErrorsPrompt(situationalErrors);
 
-    situationalErrors = situationalErrorsPrompt(situationalErrors);
-
-    filePath = filePathPrompt(filePath);
+    filePath = "/data/users/kranicac1696/src/" + filePathPrompt(filePath);
 
 
 
@@ -160,9 +161,11 @@ int main(int argc, char *argv[]) {
     tv.tv_usec = timeoutIntervalus;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof tv);
 
-    if(connect(sock, (struct sockaddr*)&client, sizeof(client)) != 0){
+    if (connect(sock, (struct sockaddr *) &client, sizeof(client)) != 0) {
         error_and_exit(logFile, "Connection with server failed, exiting client");
     }
+
+    //fcntl(sock, F_SETFL, O_NONBLOCK);
     // For testing, get user input and store it in the buffer.
     //printf("Enter a string to send to the server for testing:\r\n");
     //bzero(buffer, 256);
@@ -195,7 +198,6 @@ int main(int argc, char *argv[]) {
     } else if (situationalErrors == 2) {
         displayMessage(std::cout, logFile, "Situational Errors: User Generated");
     }
-
 
 
     while (!at_end_of_file || !gotLastAck) {
@@ -328,6 +330,90 @@ void executeSAWProtocol(void) {
 */
 
 void executeGBNProtocol(void) {
+//    if (readNewData) {
+//        readPacketsFromFile(numPacketsToRead);
+//    }
+//
+//    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+//
+//    //sending now
+//    if (sendPackets(numPacketsToRead, sequenceNum) || slidingWindowSize > 1) {
+//
+//        //waiting for response
+//        num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
+//        //num_bytes = recv(sock, rec_buffer, MAX_BUF_SIZE, 0);
+//
+//        //displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
+//        if (num_bytes <= 0) {
+//            std::cout << "recv returned with 0 bytes" << std::endl;
+//            //WE TIMED OUT!!!!!!!!
+//            //crcTableInit();
+//
+//            DisplayPacketTimedout(sequenceNum);
+//            setMarkForRetransmit(sequenceNum, slidingWindowSize);
+//
+//        } else if (num_bytes > 0) {
+//
+//            //WE GOT SOME DATA
+//            int16_t receivedSeqNum = MakeINT16(rec_buffer);
+//
+//
+//            if (rec_buffer[START_DATA_INDEX] == ACK) {
+//
+//                DisplayAckReceived(receivedSeqNum);
+//
+//                int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum);
+//                std::cout << "Slide Factor: " << slideFactor << std::endl;
+//                if (slideFactor > 0) {
+//                    //This means we got an ack on our first window so we only shift our window by one
+//                    slideWindow(slideFactor, receivedSeqNum);
+//
+//                    readNewData = 1;
+//
+//                    if ((at_end_of_file && (receivedSeqNum == lastSeqNum)) || slidingWindowSize == 1) {
+//                        gotLastAck = true;
+//                    }
+//
+//                } else {
+//                    //we are getting an ack for a future or past packet thats not in our window
+//                    //since this isn't what we want we won't do anything
+//                    setMarkForRetransmit(sequenceNum, slidingWindowSize);
+//                    outOfOrders++;
+//                }
+//            } else {
+//                // We should never get a response that isn't an ACK
+//                DisplayNakReceived(receivedSeqNum);
+//                setMarkForRetransmit(sequenceNum, slidingWindowSize);
+//                packets_failed++;
+//            }
+//        }
+//    } else {
+//        std::cout << "in gbn: not sending packet" << std::endl;
+//    }
+}
+
+void checkAllPacketsForTimeout() {
+    numPacketsToRead = 0;
+    for (int i = 0; i < slidingWindowSize; i++) {
+        if (packets[i].isUsed()) {
+            if (packets[i].getSent()) {
+                //it's used and it's send, we need to check if it's timed out
+                std::chrono::steady_clock::time_point current_ticks = std::chrono::steady_clock::now();
+                double us_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                        current_ticks - packets[i].getSentTime()).count();
+                if (us_elapsed > timeoutIntervalus) {
+                    DisplayPacketTimedout(packets[i].getSN());
+                    setSinglePacketForRetransmit(packets[i].getSN());
+                    numPacketsToRead++;
+                }
+                //retransmittedPackets++;
+            }
+        }
+    }
+}
+
+
+void executeSRProtocol(void) {
     if (readNewData) {
         readPacketsFromFile(numPacketsToRead);
     }
@@ -335,54 +421,56 @@ void executeGBNProtocol(void) {
     printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     //sending now
-    sendPackets(numPacketsToRead, sequenceNum);
+    if (sendPackets(numPacketsToRead, sequenceNum) || slidingWindowSize > 1) {
 
-    //waiting for response
-    num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
+        //waiting for response
+        num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
 
-    //displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
-    if (num_bytes <= 0) {
-        //WE TIMED OUT!!!!!!!!
-        //crcTableInit();
-        DisplayPacketTimedout(sequenceNum);
-        setMarkForRetransmit(sequenceNum, slidingWindowSize);
+        //displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
+        if (num_bytes <= 0) {
+            //WE TIMED OUT!!!!!!!!
+            //crcTableInit();
+            //DisplayPacketTimedout(sequenceNum);
+            //setMarkForRetransmit(sequenceNum, slidingWindowSize);
+            checkAllPacketsForTimeout();
+        } else if (num_bytes > 0) {
 
-    } else if (num_bytes > 0) {
-
-        //WE GOT SOME DATA
-        int16_t receivedSeqNum = MakeINT16(rec_buffer);
+            //WE GOT SOME DATA
+            int16_t receivedSeqNum = MakeINT16(rec_buffer);
 
 
-        if (rec_buffer[START_DATA_INDEX] == ACK) {
+            if (rec_buffer[START_DATA_INDEX] == ACK) {
 
-            DisplayAckReceived(receivedSeqNum);
+                DisplayAckReceived(receivedSeqNum);
 
-            int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum);
-            if (slideFactor > 0) {
-                //This means we got an ack on our first window so we only shift our window by one
-                slideWindow(slideFactor, receivedSeqNum);
+                int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum, slidingWindowSize, rangeOfSequenceNumbers);
+                std::cout << "Slide Factor: " << slideFactor << std::endl;
+                if (slideFactor > 0) {
+                    //This means we got an ack on our first window so we only shift our window by one
+                    slideWindow(slideFactor, receivedSeqNum);
 
-                readNewData = 1;
+                    readNewData = 1;
 
-                if (at_end_of_file && (receivedSeqNum == lastSeqNum)) gotLastAck = true;
+                    if ((at_end_of_file && (receivedSeqNum == lastSeqNum)) || slidingWindowSize == 1) {
+                        gotLastAck = true;
+                    }
 
+                } else {
+                    //we are getting an ack for a future or past packet thats not in our window
+                    //since this isn't what we want we won't do anything
+                    setMarkForRetransmit(sequenceNum, slidingWindowSize);
+                    outOfOrders++;
+                }
             } else {
-                //we are getting an ack for a future or past packet thats not in our window
-                //since this isn't what we want we won't do anything
+                // We should never get a response that isn't an ACK
+                DisplayNakReceived(receivedSeqNum);
                 setMarkForRetransmit(sequenceNum, slidingWindowSize);
-                outOfOrders++;
+                packets_failed++;
             }
-        } else {
-            // We should never get a response that isn't an ACK
-            DisplayNakReceived(receivedSeqNum);
-            setMarkForRetransmit(sequenceNum, slidingWindowSize);
-            packets_failed++;
         }
+    } else {
+        std::cout << "in gbn: not sending packet" << std::endl;
     }
-}
-
-void executeSRProtocol(void) {
-    executeGBNProtocol();
 }
 
 void setMarkForRetransmit(uint16_t seq, int numPackets) {
@@ -411,6 +499,26 @@ void setMarkForRetransmit(uint16_t seq, int numPackets) {
 
     numPacketsToRead = num;
 
+}
+
+void setSinglePacketForRetransmit(uint16_t seq) {
+    int num = 0;
+
+    int index = getPacketIndexBySN(seq);
+
+    // std::cout << "In setMarkForRetransmit. index : ";
+    // std::cout << index;
+    // std::cout << std::endl;
+
+    if (index >= 0) {
+        if (packets[index].getSent() == true) {
+            retransmittedPackets++;
+        }
+        packets[index].setSent(false);
+        DisplayPacketRetransMess(seq);
+        num++;
+    }
+    readNewData = 0;
 }
 
 
@@ -472,7 +580,10 @@ void readPacketsFromFile(int nPacks) {
     char lBuff[MAX_BUF_SIZE];
     int lBytesRead = 0;
 
-    if (nPacks <= 0 || nPacks > MAX_WINDOW_SIZE) return;
+    if (nPacks <= 0 || nPacks > MAX_WINDOW_SIZE) {
+        std::cout << "In readPacketsFromFile with invalid nPacks: " << nPacks << std::endl;
+        return;
+    }
 
     for (int i = 0; i < nPacks; i++) {
 
@@ -482,13 +593,15 @@ void readPacketsFromFile(int nPacks) {
             fileInputStream.read(lBuff, packetSize);
             lBytesRead = fileInputStream.gcount();
 
-            if (lBytesRead == -1) error_and_exit(logFile, "Could not open file for reading");
+            if (lBytesRead < 0) error_and_exit(logFile, "Could not open file for reading");
 
             if (lBytesRead == 0) {
+                std::cout << "At end of file in readPacketsFromFile" << std::endl;
                 at_end_of_file = 1;
                 return;
             } else if (lBytesRead < packetSize) {
                 //We know we must have read the last bit of data
+                std::cout << "At end of file in readPacketsFromFile" << std::endl;
                 at_end_of_file = 1;
             }
             totalBytesRead += lBytesRead;
@@ -505,11 +618,12 @@ void readPacketsFromFile(int nPacks) {
     }
 }
 
-void sendPackets(int nPacks, uint16_t startSN) {
-    // std::cout << "In sendPackets. nPacks : ";
-    // std::cout << nPacks;
-    // std::cout << std::endl;
+bool sendPackets(int nPacks, uint16_t startSN) {
+    std::cout << "In sendPackets. nPacks : ";
+    std::cout << nPacks;
+    std::cout << std::endl;
 
+    bool returnCode = false;
     for (int i = 0; i < nPacks; i++) {
 
         uint16_t tempSeq = startSN + i;
@@ -518,10 +632,9 @@ void sendPackets(int nPacks, uint16_t startSN) {
         int packIndex = getPacketIndexBySN(tempSeq);
 
         // int packIndex = getUnsentPacketIndex();
-
-        // std::cout << "In sendPackets. packIndex : ";
-        // std::cout << packIndex;
-        // std::cout << std::endl;
+        std::cout << "In sendPackets. nPacks: " << nPacks << std::endl;
+        std::cout << "In sendPackets. packIndex: " << packIndex << std::endl;
+        std::cout << "packet_bytes_read: " << packets[packIndex].packet_bytes_read << std::endl;
 
         if ((packIndex > -1) && (packets[packIndex].getSent() == false)) {
 
@@ -543,6 +656,7 @@ void sendPackets(int nPacks, uint16_t startSN) {
                 simulateLost = false;
             } else {
                 //sending now
+                std::cout << "In sendPackets, packet bytes read: " << packets[packIndex].packet_bytes_read << std::endl;
                 sendto(sock, buffer,
                        packets[packIndex].packet_bytes_read + WRAPPER_SIZE, 0,
                        (const struct sockaddr *) &client, length);
@@ -551,14 +665,17 @@ void sendPackets(int nPacks, uint16_t startSN) {
 
                 DisplayPacketSendMess(packets[packIndex].getSN());
                 displayBuffer(std::cout, logFile, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
-                displayEntirePacket(std::cout, logFile, &buffer[0], packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
+                displayEntirePacket(std::cout, logFile, &buffer[0],
+                                    packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
                 packets[packIndex].setSent(true);
+                packets[packIndex].startSentTime();
                 // gotLastAck = false;
             }
-
+            returnCode = true;
             packets_sent++;
         }
     }
+    return returnCode;
 }
 
 void slideWindow(int slideFactor, uint16_t recSN) {
@@ -577,14 +694,16 @@ void slideWindow(int slideFactor, uint16_t recSN) {
 }
 
 //this returns 0 if its not in the window and if it is it returns how many to slide
-int isInSlidingWindow(uint16_t sn, uint16_t recsn) {
-    for (int i = 0; i < slidingWindowSize; i++) {
-        if (recsn == (sn + i) % rangeOfSequenceNumbers) {
-            return i + 1;
-        }
-    }
-    return 0;
-}
+//int isInSlidingWindow(uint16_t sn, uint16_t recsn) {
+//    for (int i = 0; i < slidingWindowSize; i++) {
+//        if (recsn == (sn + i) % rangeOfSequenceNumbers) {
+//            return i + 1;
+//        }
+//    }
+//    return 0;
+//}
+
+
 
 
 void DisplayPacketSendMess(int packetNum) {
@@ -608,6 +727,7 @@ void DisplayPacketTimedout(int packetNum) {
 }
 
 void doDoneStuff() {
+    std::cout << "In DoDoneStuff" << std::endl;
     //we're done but to be safe we will send command to server to close the file
     //30,000 is a special sequence number close file code
     BreakINT16(buffer, 30000);
@@ -628,7 +748,8 @@ void doDoneStuff() {
 
     displayMessage(std::cout, logFile, ctime(&myTime));
 
-    double total_test_us = std::chrono::duration_cast<std::chrono::microseconds>(end_test_ticks - start_test_ticks).count();
+    double total_test_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_test_ticks - start_test_ticks).count();
 
     displayMessage(std::cout, logFile, "Session Successfully terminated");
     std::cout << std::endl;

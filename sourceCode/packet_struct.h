@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <chrono>
 #include "common.h"
 
 class packetClass {
@@ -29,7 +30,16 @@ public:
     int packet_bytes_read;
     uint32_t CRC;
     bool used;
+    std::chrono::steady_clock::time_point sent_time;
 
+
+    std::chrono::steady_clock::time_point getSentTime() {
+        return sent_time;
+    }
+
+    void startSentTime() {
+        sent_time = std::chrono::steady_clock::now();
+    }
 
     void freeUp() {
         used = false;
