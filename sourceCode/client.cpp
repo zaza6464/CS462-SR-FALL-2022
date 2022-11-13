@@ -68,11 +68,12 @@ int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
 int packetSize = 100; //specified size of packets to be sent
-int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
-int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
+int slidingWindowSize = 5; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
+int rangeOfSequenceNumbers = 11; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
 int readNewData = 1;
 int numPacketsToRead = slidingWindowSize;
+int numPacketsToRetransmit = slidingWindowSize;
 int at_end_of_file = 0;
 bool simulateLost = false;
 bool gotLastAck = false;
@@ -393,20 +394,23 @@ void executeGBNProtocol(void) {
 }
 
 void checkAllPacketsForTimeout() {
-    numPacketsToRead = 0;
+    numPacketsToRetransmit = 0;
     for (int i = 0; i < slidingWindowSize; i++) {
         if (packets[i].isUsed()) {
             if (packets[i].getSent()) {
-                //it's used and it's send, we need to check if it's timed out
-                std::chrono::steady_clock::time_point current_ticks = std::chrono::steady_clock::now();
-                double us_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                        current_ticks - packets[i].getSentTime()).count();
-                if (us_elapsed > timeoutIntervalus) {
-                    DisplayPacketTimedout(packets[i].getSN());
-                    setSinglePacketForRetransmit(packets[i].getSN());
-                    numPacketsToRead++;
+                if (!packets[i].getAck()) {
+                    //it's used and it's send, we need to check if it's timed out
+                    std::chrono::steady_clock::time_point current_ticks = std::chrono::steady_clock::now();
+                    double us_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                            current_ticks - packets[i].getSentTime()).count();
+                    if (us_elapsed > timeoutIntervalus) {
+                        std::cout << "Packet index for retransmit: " << i << std::endl;
+                        DisplayPacketTimedout(packets[i].getSN());
+                        setSinglePacketForRetransmit(packets[i].getSN());
+                        numPacketsToRetransmit++;
+                    }
+                    //retransmittedPackets++;
                 }
-                //retransmittedPackets++;
             }
         }
     }
@@ -421,7 +425,7 @@ void executeSRProtocol(void) {
     printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     //sending now
-    if (sendPackets(numPacketsToRead, sequenceNum) || slidingWindowSize > 1) {
+    if (sendPackets(numPacketsToRetransmit, sequenceNum) || slidingWindowSize > 1) {
 
         //waiting for response
         num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
@@ -443,9 +447,10 @@ void executeSRProtocol(void) {
 
                 DisplayAckReceived(receivedSeqNum);
 
-                int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum, slidingWindowSize, rangeOfSequenceNumbers);
+                int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum, slidingWindowSize,
+                                                    rangeOfSequenceNumbers);
                 std::cout << "Slide Factor: " << slideFactor << std::endl;
-                if (slideFactor > 0) {
+                if (slideFactor == 1) {
                     //This means we got an ack on our first window so we only shift our window by one
                     slideWindow(slideFactor, receivedSeqNum);
 
@@ -455,12 +460,18 @@ void executeSRProtocol(void) {
                         gotLastAck = true;
                     }
 
-                } else {
-                    //we are getting an ack for a future or past packet thats not in our window
-                    //since this isn't what we want we won't do anything
-                    setMarkForRetransmit(sequenceNum, slidingWindowSize);
+                } else if (slideFactor > 1) {
+                    //we are getting an ack for a future packet that is in our window
+                    int index = getPacketIndexBySN(receivedSeqNum);
+
+                    if (index >= 0) {
+                        std::cout << "Setting packet index: " << index << "to acked" << std::endl;
+                        packets[index].setAck(true);
+                    }
+
                     outOfOrders++;
                 }
+
             } else {
                 // We should never get a response that isn't an ACK
                 DisplayNakReceived(receivedSeqNum);
@@ -469,7 +480,8 @@ void executeSRProtocol(void) {
             }
         }
     } else {
-        std::cout << "in gbn: not sending packet" << std::endl;
+        std::cout << "in gbn: not sending packet" <<
+                  std::endl;
     }
 }
 
@@ -497,7 +509,7 @@ void setMarkForRetransmit(uint16_t seq, int numPackets) {
         readNewData = 0;
     }
 
-    numPacketsToRead = num;
+    numPacketsToRetransmit = num;
 
 }
 
@@ -680,17 +692,23 @@ bool sendPackets(int nPacks, uint16_t startSN) {
 
 void slideWindow(int slideFactor, uint16_t recSN) {
     //We are acknowledging 1 or more packets have been acked by accepting the last sequence number
-
-    for (int i = 0; i < slideFactor; i++) {
-        int packIndex = getPacketIndexBySN(sequenceNum);
-        if (packIndex > -1) {
-            packets[packIndex].freeUp();
+    numPacketsToRead = 0;
+    for (int i = 0; i < slidingWindowSize; i++) {
+        for (int j = 0; j < slidingWindowSize; j++) {
+            packets[i] = packets[i + 1];
         }
-
+        packets[slidingWindowSize - 1].freeUp();
+        numPacketsToRead++;
         sequenceNum++;
         sequenceNum = sequenceNum % rangeOfSequenceNumbers;
+
+        if (!packets[0].getAck()) {
+            break;
+        } else {
+            std::cout << "In slideWindow, sliding additional packet of sequenceNum: " << packets[0].getSN()
+                      << std::endl;
+        }
     }
-    numPacketsToRead = slideFactor;
 }
 
 //this returns 0 if its not in the window and if it is it returns how many to slide

@@ -35,12 +35,12 @@ int crcError = 0;
 int numChecksumFailed = 0;
 int numOutOfSequence = 0;
 int numOriginalPackets = 0;
-int rangeOfSequenceNumbers = 5; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
+int rangeOfSequenceNumbers = 11; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
 std::string ipAddress = "172.23.0.2"; //IP address of the target server
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
 std::string filePath = "test"; //path to file to be sent
-int slidingWindowSize = 1; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
+int slidingWindowSize = 5; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
 int done = 0;
 int packetSize = 100; //specified size of packets to be sent
 int full_packet_size = 0;
@@ -68,7 +68,13 @@ void executeGBNProtocol(void);
 
 void executeSRProtocol(void);
 
+void sendAck(void);
+
 void doDoneStuff(void);
+
+void writeToFile(int seq, char* buff);
+
+void incrementSequenceNum(void);
 
 int main(int argc, char *argv[]) {
 
@@ -298,7 +304,7 @@ void executeGBNProtocol(void) {
 }
 
 void executeSRProtocol(void) {
-    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+    printWindow(std::cout, logFile, slidingWindowSize, baseSeqNum, rangeOfSequenceNumbers);
     numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from,
                                 &fromlen);
     memcpy(buffer, readBuffer, numCharsReceived);
@@ -365,46 +371,45 @@ void executeSRProtocol(void) {
     if (!crcError) {
         int slideFactor = isInSlidingWindow(baseSeqNum, receivedSeqNum, slidingWindowSize, rangeOfSequenceNumbers);
         if (slideFactor > 0) {
+            std::cout << "Slidefactor: " << slideFactor << std::endl;
             if (receivedSeqNum == baseSeqNum) {
                 //this is if we got the expected sequence number in order
                 //we will write and ack
 
                 //10% the ack won't be sent
                 //if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
-                BreakINT16(response_buff, receivedSeqNum);
-                response_buff[START_DATA_INDEX] = (char) ACK;
-                numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
-                                 0, (struct sockaddr *) &from, fromlen);
-                if (numSent < 0) {
-                    error_and_exit(logFile, "sendto Error");
+                if (numOriginalPackets != 3) {
+
+                    sendAck();
+                    writeToFile(receivedSeqNum, &buffer[START_DATA_INDEX]);
+                    incrementSequenceNum();
+
+                    bool slideWindow = true;
+                    while (slideWindow) {
+                        //Shift sliding window
+                        for (int i = 0; i < slidingWindowSize - 1; i++) {
+                            packets[i] = packets[i + 1];
+                        }
+                        packets[slidingWindowSize - 1].freeUp();
+                        //We have shifted our sliding window, but we need to check if the next packet has already been received
+                        if (packets[0].isUsed()) {
+                            std::cout << "Shifted queue, writing base" << std::endl;
+                            writeToFile(packets[0].getSN(), &packets[0].buffer[START_DATA_INDEX]);
+                            incrementSequenceNum();
+
+                        } else {
+                            slideWindow = false;
+                        }
+                    }
+                } else {
+                    numOriginalPackets++;
+                    std::cout << "Intentionally dropping packet" << std::endl;
                 }
-                //}
-                fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
-
-                // std::cout << "WRITING TO FILE. receivedSeqNum: ";
-                // std::cout << receivedSeqNum;
-                // std::cout << std::endl;
-
-                lastAckedSeqNum = baseSeqNum;
-                numOriginalPackets++;
-                baseSeqNum++;
-                baseSeqNum = baseSeqNum % rangeOfSequenceNumbers;
-                displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
-                std::cout << std::endl;
-            }else{
+            } else {
+                std::cout << "Saving out of order packet, received seqNum: " << receivedSeqNum << std::endl;
                 packets[slideFactor - 1].loadPacket(receivedSeqNum, numCharsReceived, buffer);
-
-                BreakINT16(response_buff, receivedSeqNum);
-                response_buff[START_DATA_INDEX] = (char) ACK;
-                numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
-                                 0, (struct sockaddr *) &from, fromlen);
-                if (numSent < 0) {
-                    error_and_exit(logFile, "sendto Error");
-                }
-
-                fileOutputStream.write(&buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
+                sendAck();
             }
-
         } else if (receivedSeqNum < sequenceNum) {
             //this is if we already acked and saved this packet
             //we will ack it again and not save
@@ -440,6 +445,36 @@ void executeSRProtocol(void) {
             // doDoneStuff();
         }
     }
+}
+
+void sendAck() {
+    BreakINT16(response_buff, receivedSeqNum);
+    response_buff[START_DATA_INDEX] = (char) ACK;
+    numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
+                     0, (struct sockaddr *) &from, fromlen);
+    if (numSent < 0) {
+        error_and_exit(logFile, "sendto Error");
+    }
+    //}
+
+
+    displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
+    std::cout << std::endl;
+}
+
+void writeToFile(int seq, char* buff){
+    fileOutputStream.write(buff, numCharsReceived - WRAPPER_SIZE);
+
+     std::cout << "WRITING TO FILE. seq: ";
+     std::cout << seq;
+     std::cout << std::endl;
+}
+
+void incrementSequenceNum(){
+    lastAckedSeqNum = baseSeqNum;
+    numOriginalPackets++;
+    baseSeqNum++;
+    baseSeqNum = baseSeqNum % rangeOfSequenceNumbers;
 }
 
 void doDoneStuff(void) {
