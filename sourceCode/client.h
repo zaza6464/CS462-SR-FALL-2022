@@ -30,7 +30,7 @@ void readPacketsFromFile(int);
 bool sendPackets(int, uint16_t startSN);
 int getPacketIndexBySN(uint16_t);
 void slideWindow(int, uint16_t);
-
+void printQueue(std::ostream &console, std::ostream &log, int slidingWS, int seq, int rangeOfSeqNum);
 
 void DisplayPacketSendMess(int packetNum);
 void DisplayPacketRetransMess(int packetNum);

@@ -68,19 +68,24 @@ void executeGBNProtocol(void);
 
 void executeSRProtocol(void);
 
-void sendAck(void);
+void sendAck(int seqNum);
 
 void doDoneStuff(void);
 
-void writeToFile(int seq, char* buff);
+void writeToFile(int seq, char *buff);
 
 void incrementSequenceNum(void);
+
+void printQueue(std::ostream &console, std::ostream &log, int slidingWS, int seq, int rangeOfSeqNum);
 
 int main(int argc, char *argv[]) {
 
     // create the CRC lookup table so we can use it later.
     crcTableInit();
 
+    for (int i = 0; i < slidingWindowSize; i++) {
+        packets[i].freeUp();
+    }
     //ipAddress = ipAddressPrompt(ipAddress);
     //portNum = portNumPrompt(portNum);
     packetSize = packetSizePrompt(packetSize);
@@ -305,9 +310,11 @@ void executeGBNProtocol(void) {
 
 void executeSRProtocol(void) {
     printWindow(std::cout, logFile, slidingWindowSize, baseSeqNum, rangeOfSequenceNumbers);
+    printQueue(std::cout, logFile, slidingWindowSize, baseSeqNum, rangeOfSequenceNumbers);
     numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from,
                                 &fromlen);
     memcpy(buffer, readBuffer, numCharsReceived);
+    std::cout << "bytes received: " << numCharsReceived << std::endl;
     //numCharsReceived = read(connsock, buffer, MAX_BUF_SIZE);
     if (numCharsReceived <= 0) {
         error_and_exit(logFile, "Read error, exiting server");
@@ -380,7 +387,7 @@ void executeSRProtocol(void) {
                 //if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
                 if (numOriginalPackets != 3) {
 
-                    sendAck();
+                    sendAck(receivedSeqNum);
                     writeToFile(receivedSeqNum, &buffer[START_DATA_INDEX]);
                     incrementSequenceNum();
 
@@ -408,9 +415,10 @@ void executeSRProtocol(void) {
             } else {
                 std::cout << "Saving out of order packet, received seqNum: " << receivedSeqNum << std::endl;
                 packets[slideFactor - 1].loadPacket(receivedSeqNum, numCharsReceived, buffer);
-                sendAck();
+                sendAck(receivedSeqNum);
             }
-        } else if (receivedSeqNum < sequenceNum) {
+        } else if (receivedSeqNum < baseSeqNum) {
+            sendAck(receivedSeqNum);
             //this is if we already acked and saved this packet
             //we will ack it again and not save
             /*
@@ -447,8 +455,8 @@ void executeSRProtocol(void) {
     }
 }
 
-void sendAck() {
-    BreakINT16(response_buff, receivedSeqNum);
+void sendAck(int seqNum) {
+    BreakINT16(response_buff, seqNum);
     response_buff[START_DATA_INDEX] = (char) ACK;
     numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
                      0, (struct sockaddr *) &from, fromlen);
@@ -458,23 +466,39 @@ void sendAck() {
     //}
 
 
-    displayIntDataMessage(std::cout, logFile, "Ack ", receivedSeqNum, " sent");
+    displayIntDataMessage(std::cout, logFile, "\r\nAck ", seqNum, " sent\r\n");
     std::cout << std::endl;
 }
 
-void writeToFile(int seq, char* buff){
+void writeToFile(int seq, char *buff) {
     fileOutputStream.write(buff, numCharsReceived - WRAPPER_SIZE);
 
-     std::cout << "WRITING TO FILE. seq: ";
-     std::cout << seq;
-     std::cout << std::endl;
+    std::cout << "WRITING TO FILE. seq: ";
+    std::cout << seq;
+    std::cout << std::endl;
 }
 
-void incrementSequenceNum(){
+void incrementSequenceNum() {
     lastAckedSeqNum = baseSeqNum;
     numOriginalPackets++;
     baseSeqNum++;
     baseSeqNum = baseSeqNum % rangeOfSequenceNumbers;
+}
+
+void printQueue(std::ostream &console, std::ostream &log, int slidingWS, int seq, int rangeOfSeqNum) {
+
+    console << "Current queue = [";
+    log << "Current queue = [";
+    int i = 0;
+    for (i = 0; i < slidingWS - 1; i++) {
+        console << packets[i].getSN() << ", ";
+        log << packets[i].getSN() << ", ";
+    }
+    console << packets[i].getSN();
+    log << packets[i].getSN();
+    console << "]" << std::endl;
+    log << "]" << std::endl;
+
 }
 
 void doDoneStuff(void) {

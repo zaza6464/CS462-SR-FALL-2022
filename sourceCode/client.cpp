@@ -89,6 +89,9 @@ int main(int argc, char *argv[]) {
     //crc testcrc = crcFun((uint8_t *)test, 12);
     //std::cout << "the crc of our test string is: " << testcrc << std::endl;
 
+    for (int i = 0; i < slidingWindowSize; i++) {
+        packets[i].freeUp();
+    }
 
     //prompt user for each of the following fields
     //ipAddress = ipAddressPrompt(ipAddress);
@@ -423,6 +426,7 @@ void executeSRProtocol(void) {
     }
 
     printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+    printQueue(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     //sending now
     if (sendPackets(numPacketsToRetransmit, sequenceNum) || slidingWindowSize > 1) {
@@ -430,7 +434,9 @@ void executeSRProtocol(void) {
         //waiting for response
         num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
 
-        //displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
+        displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
+        displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
+                              MakeINT16(rec_buffer), "");
         if (num_bytes <= 0) {
             //WE TIMED OUT!!!!!!!!
             //crcTableInit();
@@ -450,7 +456,7 @@ void executeSRProtocol(void) {
                 int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum, slidingWindowSize,
                                                     rangeOfSequenceNumbers);
                 std::cout << "Slide Factor: " << slideFactor << std::endl;
-                if (slideFactor == 1) {
+                if (receivedSeqNum == sequenceNum) { //slideFactor == 1) {
                     //This means we got an ack on our first window so we only shift our window by one
                     slideWindow(slideFactor, receivedSeqNum);
 
@@ -465,10 +471,11 @@ void executeSRProtocol(void) {
                     int index = getPacketIndexBySN(receivedSeqNum);
 
                     if (index >= 0) {
-                        std::cout << "Setting packet index: " << index << "to acked" << std::endl;
+                        std::cout << "Setting packet index: " << index << " to acked" << std::endl;
                         packets[index].setAck(true);
                     }
 
+                    readNewData = 0;
                     outOfOrders++;
                 }
 
@@ -587,6 +594,21 @@ int getPacketIndexBySN(uint16_t sn) {
     return -1;
 }
 
+void printQueue(std::ostream &console, std::ostream &log, int slidingWS, int seq, int rangeOfSeqNum) {
+
+    console << "Current queue = [";
+    log << "Current queue = [";
+    int i = 0;
+    for (i = 0; i < slidingWS - 1; i++) {
+        console << packets[i].getSN() << ", ";
+        log << packets[i].getSN() << ", ";
+    }
+    console << packets[i].getSN();
+    log << packets[i].getSN();
+    console << "]" << std::endl;
+    log << "]" << std::endl;
+
+}
 
 void readPacketsFromFile(int nPacks) {
     char lBuff[MAX_BUF_SIZE];
@@ -595,6 +617,8 @@ void readPacketsFromFile(int nPacks) {
     if (nPacks <= 0 || nPacks > MAX_WINDOW_SIZE) {
         std::cout << "In readPacketsFromFile with invalid nPacks: " << nPacks << std::endl;
         return;
+    } else {
+        std::cout << "In readPacketsFromFile with nPacks: " << nPacks << std::endl;
     }
 
     for (int i = 0; i < nPacks; i++) {
@@ -619,6 +643,8 @@ void readPacketsFromFile(int nPacks) {
             totalBytesRead += lBytesRead;
             originalPackets++;
             packets[packIndex].loadPacket(nextSeqNum, lBytesRead, lBuff);
+            std::cout << "packet index: " << packIndex << " nextSeqNum: " << nextSeqNum << std::endl;
+
             lastSeqNum = nextSeqNum;
             nextSeqNum++;
             nextSeqNum = nextSeqNum % rangeOfSequenceNumbers;
@@ -631,12 +657,12 @@ void readPacketsFromFile(int nPacks) {
 }
 
 bool sendPackets(int nPacks, uint16_t startSN) {
-    std::cout << "In sendPackets. nPacks : ";
-    std::cout << nPacks;
-    std::cout << std::endl;
+//    std::cout << "In sendPackets. nPacks : ";
+//    std::cout << nPacks;
+//    std::cout << std::endl;
 
     bool returnCode = false;
-    for (int i = 0; i < nPacks; i++) {
+    for (int i = 0; i < slidingWindowSize; i++) {
 
         uint16_t tempSeq = startSN + i;
         tempSeq = tempSeq % rangeOfSequenceNumbers;
@@ -644,12 +670,12 @@ bool sendPackets(int nPacks, uint16_t startSN) {
         int packIndex = getPacketIndexBySN(tempSeq);
 
         // int packIndex = getUnsentPacketIndex();
-        std::cout << "In sendPackets. nPacks: " << nPacks << std::endl;
-        std::cout << "In sendPackets. packIndex: " << packIndex << std::endl;
-        std::cout << "packet_bytes_read: " << packets[packIndex].packet_bytes_read << std::endl;
 
         if ((packIndex > -1) && (packets[packIndex].getSent() == false)) {
-
+            std::cout << "In sendPackets. nPacks: " << nPacks << std::endl;
+            std::cout << "In sendPackets. packIndex: " << packIndex << std::endl;
+            std::cout << "In sendPackets. Packet sequenceNum: " << packets[packIndex].getSN() << std::endl;
+            std::cout << "packet_bytes_read: " << packets[packIndex].packet_bytes_read << std::endl;
 
             // use a temporary buffer so original seq num doesn't get permanently changed when we are
             // simulating errors.
@@ -693,12 +719,14 @@ bool sendPackets(int nPacks, uint16_t startSN) {
 void slideWindow(int slideFactor, uint16_t recSN) {
     //We are acknowledging 1 or more packets have been acked by accepting the last sequence number
     numPacketsToRead = 0;
+    numPacketsToRetransmit = 0;
     for (int i = 0; i < slidingWindowSize; i++) {
-        for (int j = 0; j < slidingWindowSize; j++) {
-            packets[i] = packets[i + 1];
+        for (int j = 0; j < slidingWindowSize - 1; j++) {
+            packets[j] = packets[j + 1];
         }
         packets[slidingWindowSize - 1].freeUp();
         numPacketsToRead++;
+        numPacketsToRetransmit++;
         sequenceNum++;
         sequenceNum = sequenceNum % rangeOfSequenceNumbers;
 
@@ -733,7 +761,7 @@ void DisplayPacketRetransMess(int packetNum) {
 }
 
 void DisplayAckReceived(int packetNum) {
-    displayIntDataMessage(std::cout, logFile, "Ack ", packetNum, " received");
+    displayIntDataMessage(std::cout, logFile, "\r\nAck ", packetNum, " received\r\n");
 }
 
 void DisplayNakReceived(int packetNum) {
