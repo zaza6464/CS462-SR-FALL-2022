@@ -66,6 +66,7 @@ std::string filePath = "/data/users/kranicac1696/src/1M"; //path to file to be s
 std::string ipAddress = "172.23.0.3"; //IP address of the target server
 int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
+int socketTimeoutus = 50000;
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
 int packetSize = 100; //specified size of packets to be sent
 int slidingWindowSize = 5; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
@@ -162,7 +163,7 @@ int main(int argc, char *argv[]) {
 
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = timeoutIntervalus;
+    tv.tv_usec = socketTimeoutus;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof tv);
 
     if (connect(sock, (struct sockaddr *) &client, sizeof(client)) != 0) {
@@ -428,15 +429,20 @@ void executeSRProtocol(void) {
     printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
     printQueue(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
+    readNewData = 0;
     //sending now
     if (sendPackets(numPacketsToRetransmit, sequenceNum) || slidingWindowSize > 1) {
 
         //waiting for response
-        num_bytes = recvfrom(sock, rec_buffer, MAX_BUF_SIZE, 0, (struct sockaddr *) &from, &length);
+        num_bytes = recvfrom(sock, rec_buffer, 3, 0, (struct sockaddr *) &from, &length);
+
 
         displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
+
         displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
                               MakeINT16(rec_buffer), "");
+
+
         if (num_bytes <= 0) {
             //WE TIMED OUT!!!!!!!!
             //crcTableInit();
@@ -445,6 +451,10 @@ void executeSRProtocol(void) {
             checkAllPacketsForTimeout();
         } else if (num_bytes > 0) {
 
+            if(num_bytes > 3){
+                std::cout << "number of bytes: " << num_bytes << " ----EXITING" << std::endl;
+                error_and_exit(logFile, "Exiting");
+            }
             //WE GOT SOME DATA
             int16_t receivedSeqNum = MakeINT16(rec_buffer);
 

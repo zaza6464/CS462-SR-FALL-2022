@@ -191,6 +191,19 @@ int isInSlidingWindow(uint16_t sn, uint16_t recsn, int slidingWindowSize, int ra
     return 0;
 }
 
+int isInPreviousWindow(uint16_t sn, uint16_t recsn, int slidingWindowSize){
+    for (int i = 0; i < slidingWindowSize; i++) {
+        int tempSN = sn - (i + 1);
+        if(tempSN < 0){
+            tempSN = slidingWindowSize + tempSN;
+        }
+        if (recsn == tempSN) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
 void displayMessage(std::ostream &console, std::ostream &log, std::string mess) {
     console << mess << std::endl;
     log << mess << std::endl;

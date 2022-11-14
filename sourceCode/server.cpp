@@ -72,7 +72,7 @@ void sendAck(int seqNum);
 
 void doDoneStuff(void);
 
-void writeToFile(int seq, char *buff);
+void writeToFile(int seq, char *buff, int charsToWrite);
 
 void incrementSequenceNum(void);
 
@@ -314,6 +314,7 @@ void executeSRProtocol(void) {
     numCharsReceived = recvfrom(connsock, readBuffer, packetSize + WRAPPER_SIZE, 0, (struct sockaddr *) &from,
                                 &fromlen);
     memcpy(buffer, readBuffer, numCharsReceived);
+
     std::cout << "bytes received: " << numCharsReceived << std::endl;
     //numCharsReceived = read(connsock, buffer, MAX_BUF_SIZE);
     if (numCharsReceived <= 0) {
@@ -388,7 +389,7 @@ void executeSRProtocol(void) {
                 if (numOriginalPackets != 3) {
 
                     sendAck(receivedSeqNum);
-                    writeToFile(receivedSeqNum, &buffer[START_DATA_INDEX]);
+                    writeToFile(receivedSeqNum, &buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
                     incrementSequenceNum();
 
                     bool slideWindow = true;
@@ -401,7 +402,7 @@ void executeSRProtocol(void) {
                         //We have shifted our sliding window, but we need to check if the next packet has already been received
                         if (packets[0].isUsed()) {
                             std::cout << "Shifted queue, writing base" << std::endl;
-                            writeToFile(packets[0].getSN(), &packets[0].buffer[START_DATA_INDEX]);
+                            writeToFile(packets[0].getSN(), &packets[0].buffer[START_DATA_INDEX], packets[0].packet_bytes_read);
                             incrementSequenceNum();
 
                         } else {
@@ -414,10 +415,10 @@ void executeSRProtocol(void) {
                 }
             } else {
                 std::cout << "Saving out of order packet, received seqNum: " << receivedSeqNum << std::endl;
-                packets[slideFactor - 1].loadPacket(receivedSeqNum, numCharsReceived, buffer);
+                packets[slideFactor - 1].loadPacket(receivedSeqNum, numCharsReceived - WRAPPER_SIZE, &buffer[START_DATA_INDEX]);
                 sendAck(receivedSeqNum);
             }
-        } else if (receivedSeqNum < baseSeqNum) {
+        } else if (isInPreviousWindow(baseSeqNum, receivedSeqNum, slidingWindowSize)) {
             sendAck(receivedSeqNum);
             //this is if we already acked and saved this packet
             //we will ack it again and not save
@@ -470,8 +471,8 @@ void sendAck(int seqNum) {
     std::cout << std::endl;
 }
 
-void writeToFile(int seq, char *buff) {
-    fileOutputStream.write(buff, numCharsReceived - WRAPPER_SIZE);
+void writeToFile(int seq, char *buff, int charsToWrite) {
+    fileOutputStream.write(buff, charsToWrite);
 
     std::cout << "WRITING TO FILE. seq: ";
     std::cout << seq;
