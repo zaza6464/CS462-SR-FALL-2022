@@ -69,6 +69,7 @@ void executeGBNProtocol(void);
 void executeSRProtocol(void);
 
 void sendAck(int seqNum);
+void sendNak(int seqNum);
 
 void doDoneStuff(void);
 
@@ -385,8 +386,8 @@ void executeSRProtocol(void) {
                 //we will write and ack
 
                 //10% the ack won't be sent
-                //if (situationalErrors == 1 && !(numOriginalPackets % 10)) {
-                if (numOriginalPackets != 3) {
+                if ((situationalErrors == 0) || ((numOriginalPackets % 10) != 0)) {
+                // if (numOriginalPackets != 3) {
 
                     sendAck(receivedSeqNum);
                     writeToFile(receivedSeqNum, &buffer[START_DATA_INDEX], numCharsReceived - WRAPPER_SIZE);
@@ -411,7 +412,7 @@ void executeSRProtocol(void) {
                     }
                 } else {
                     numOriginalPackets++;
-                    std::cout << "Intentionally dropping packet" << std::endl;
+                    std::cout << "Intentionally dropping packet (numOriginalPackets = " << numOriginalPackets << ")" << std::endl;
                 }
             } else {
                 std::cout << "Saving out of order packet, received seqNum: " << receivedSeqNum << std::endl;
@@ -453,7 +454,12 @@ void executeSRProtocol(void) {
         if (numCharsReceived > 0 && numCharsReceived != full_packet_size) {
             // doDoneStuff();
         }
-    }
+    } else
+    {
+		// this is the CRC error logic.  We should send a NAK
+		sendNak(receivedSeqNum);
+		numChecksumFailed++;
+	}
 }
 
 void sendAck(int seqNum) {
@@ -468,6 +474,19 @@ void sendAck(int seqNum) {
 
 
     displayIntDataMessage(std::cout, logFile, "\r\nAck ", seqNum, " sent\r\n");
+    std::cout << std::endl;
+}
+
+void sendNak(int seqNum) {
+    BreakINT16(response_buff, seqNum);
+    response_buff[START_DATA_INDEX] = (char) NAK;
+    numSent = sendto(connsock, response_buff, START_DATA_INDEX + 1,
+                     0, (struct sockaddr *) &from, fromlen);
+    if (numSent < 0) {
+        error_and_exit(logFile, "sendto Error");
+    }
+
+    displayIntDataMessage(std::cout, logFile, "\r\nNak ", seqNum, " sent\r\n");
     std::cout << std::endl;
 }
 
@@ -508,6 +527,11 @@ void doDoneStuff(void) {
     displayIntDataMessage(std::cout, logFile, "Number of original packets received:   ", numOriginalPackets, "");
     std::cout << std::endl;
     displayIntDataMessage(std::cout, logFile, "Number of retransmitted packets received: ", numOutOfSequence, "");
+    std::cout << std::endl;
+    
+    displayIntDataMessage(std::cout, logFile, "Number of checksums that failed:  ", numChecksumFailed, "");
+    std::cout << std::endl;
+    displayIntDataMessage(std::cout, logFile, "Number of out of sequence packets:  ", numOutOfSequence, "");
     std::cout << std::endl;
 
     displayMessage(std::cout, logFile, "");

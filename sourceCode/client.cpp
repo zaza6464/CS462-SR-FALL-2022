@@ -66,7 +66,7 @@ std::string filePath = "/data/users/kranicac1696/src/1M"; //path to file to be s
 std::string ipAddress = "172.23.0.3"; //IP address of the target server
 int portNum = 6789; //port number of the target server
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
-int socketTimeoutus = 50000;
+int socketTimeoutus = 1000;  // was 50000 (1G takes 3 hrs with 10% timeouts), was 5000 (1G takes just under 2 hrs with 10% timeouts)
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
 int packetSize = 100; //specified size of packets to be sent
 int slidingWindowSize = 5; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
@@ -207,6 +207,10 @@ int main(int argc, char *argv[]) {
 
     while (!at_end_of_file || !gotLastAck) {
         // while (!at_end_of_file) {
+        
+        if (at_end_of_file) std::cout << "at_end_of_file is TRUE" << std::endl;
+        if (gotLastAck) std::cout << "gotLastAck is TRUE" << std::endl;
+        
         switch (protocolType) {
             case 0:
                 // executeSAWProtocol();
@@ -398,9 +402,12 @@ void executeGBNProtocol(void) {
 }
 
 void checkAllPacketsForTimeout() {
+	int numUsedPackets = 0;
+	
     numPacketsToRetransmit = 0;
     for (int i = 0; i < slidingWindowSize; i++) {
         if (packets[i].isUsed()) {
+			numUsedPackets++;
             if (packets[i].getSent()) {
                 if (!packets[i].getAck()) {
                     //it's used and it's send, we need to check if it's timed out
@@ -418,6 +425,12 @@ void checkAllPacketsForTimeout() {
             }
         }
     }
+    
+    if (numUsedPackets == 0)
+    {
+		// There are no packets that are waiting to be acked (or even used for that matter)
+		gotLastAck = true;
+	}
 }
 
 
@@ -454,7 +467,11 @@ void executeSRProtocol(void) {
             if(num_bytes > 3){
                 std::cout << "number of bytes: " << num_bytes << " ----EXITING" << std::endl;
                 error_and_exit(logFile, "Exiting");
-            }
+            } else
+            {
+				displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
+								MakeINT16(rec_buffer), "");
+			}
             //WE GOT SOME DATA
             int16_t receivedSeqNum = MakeINT16(rec_buffer);
 
@@ -557,7 +574,11 @@ void generateRandomSituationalErrors(char *buff, uint16_t seq, int bsRead) {
     // Don't do more than one of these errors at a time!
 
     //10% of the time the packet will be out of order
-    if (!(packets_sent % 10)) {
+    // This worked for GBN but not for Selective Repeat.  If we are mutating the sequence number
+    // Selective Repeat could accept it as a valid sequence number (if in its window) and store it
+    // in the packet queue.  This will corrupt the write file.  For SR, we should maybe NOT mutate the
+    // sequence number but instead send some packets from the packet array out of order instead.
+    /*if (!(packets_sent % 10)) {
         //inserting sequence # into buffer
         BreakINT16(buff, seq + rand() % 10 + 1);
 
@@ -565,15 +586,20 @@ void generateRandomSituationalErrors(char *buff, uint16_t seq, int bsRead) {
         uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
         BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
 
-    } else if (!((packets_sent + rand() % 10 + 1) % 10)) {
+    } else */
+    if (!((packets_sent + rand() % 10 + 1) % 10)) {
+    // if ((originalPackets % 10) == 0) {
         //10% of the time we will send a bad crc
         //inducing bad crc
         uint32_t CRC = rand() % 10 + 1;
         BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
-    } else if (!((packets_sent + rand() % 10 + 1) % 10)) {
+    } /*
+    // The server also simulates packets lost by just dropping the packet and not sending the ACK.
+    else if (!((packets_sent + rand() % 10 + 1) % 10)) {
         //10% the packet will appear to be sent, but will be not actually be send/ it will be lost
         simulateLost = true;
     }
+    */
 }
 
 
@@ -723,6 +749,7 @@ bool sendPackets(int nPacks, uint16_t startSN) {
             packets_sent++;
         }
     }
+
     return returnCode;
 }
 
