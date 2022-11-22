@@ -11,11 +11,15 @@
 #define SHOW_BUFFER 0
 #define SHOW_ENTIRE_PACKET 0
 #define MAX_WINDOW_SIZE 25
-#define DEFAULT_TIMEOUT_US 5000
+#define DEFAULT_TIMEOUT_US 500000
 #define MAX_PACKET_SIZE 10000
 #define MAX_BUF_SIZE (MAX_PACKET_SIZE * 5) // may need to change this if we don't have room for the crc
                            // (since it takes up 4 indices instead of 2 now)
+#define MAX_USER_ENTERED_PACKETS	1000
 #define DEBUGCRC 0
+#define DEBUGUSERERRORS	0
+#define DEBUGEVERYTHINGELSE	0
+#define DEBUGTIMOUTS	1
 
 
 /* CRC generation code is modified from Michael Barr's open source code:
@@ -41,6 +45,11 @@ void error_and_exit(std::ostream& log, const char *msg);
 // user input prompts
 int slidingWindowSizePrompt(int defaultWindowSize);
 int situationalErrorsPrompt(int defaultSituationalErrors);
+int outOfOrderPacketsPrompt(int* numberArray);
+int dropPacketsPrompt(int* numberArray);
+int corruptPacketsPrompt(int* numberArray);
+int dropAcksPrompt(int* numberArray);
+int getNumbersFromUserInput(int* numberArray);
 int portNumPrompt(int defaultPortNum);
 std::string filePathPrompt(std::string defaultPath);
 std::string ipAddressPrompt(std::string defaultIpAddress);

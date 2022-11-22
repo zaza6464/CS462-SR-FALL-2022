@@ -65,20 +65,35 @@ char rec_buffer[MAX_BUF_SIZE];
 std::string filePath = "/data/users/kranicac1696/src/1M"; //path to file to be sent
 std::string ipAddress = "172.23.0.3"; //IP address of the target server
 int portNum = 6789; //port number of the target server
+
 int timeoutIntervalus = DEFAULT_TIMEOUT_US; //user-specified (0+) or ping calculated (-1)
-int socketTimeoutus = 1000;  // was 50000 (1G takes 3 hrs with 10% timeouts), was 5000 (1G takes just under 2 hrs with 10% timeouts)
+/*************** socketTimeoutus is what the TCP stream read is set to time out for.  It should be set so we aren't
+ * getting timeouts all the time unless we are simulating them.  On the slow test server this may need to be set very
+ * high (remember this is microseconds  where 1000 us = 1 milisecond. Also this is only for receiving the ack on the
+ * client side BUT is for receiving the whole packet on the server side.
+ */
+int socketTimeoutus = 5000;  // was 50000 (1G takes 3 hrs with 10% timeouts), was 5000 (1G takes just under 2 hrs with 10% timeouts)
 int protocolType = 0; //0 for S&W, 1 for GBN, 2 for SR
 int packetSize = 100; //specified size of packets to be sent
 int slidingWindowSize = 5; //ex. [1, 2, 3, 4, 5, 6, 7, 8], size = 8
-int rangeOfSequenceNumbers = 11; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
+int rangeOfSequenceNumbers = 1000; //ex. (sliding window size = 3) [1, 2, 3] -> [2, 3, 4] -> [3, 4, 5], range = 5
 int situationalErrors = 0; //none (0), randomly generated (1), or user-specified (2)
+
+// We need to get some arrays to hold the user entered packet numbers to generate errors. We also
+// need a counter so we know how many numbers were entered for each error type.
+int packetsToBeOutOfOrder[MAX_USER_ENTERED_PACKETS];
+int iNumPacketsToBeOutOfOrder = 0;
+int droppedPackets[MAX_USER_ENTERED_PACKETS];
+int iNumDroppedPackets = 0;
+int corruptPackets[MAX_USER_ENTERED_PACKETS];
+int iNumCorruptPackets = 0;
+
 int readNewData = 1;
 int numPacketsToRead = slidingWindowSize;
 int numPacketsToRetransmit = slidingWindowSize;
 int at_end_of_file = 0;
 bool simulateLost = false;
 bool gotLastAck = false;
-//char test[12] = {0,0,'t','h','i','s',' ','i','s',' ','a','n'};
 
 packetClass packets[MAX_WINDOW_SIZE];
 
@@ -98,6 +113,7 @@ int main(int argc, char *argv[]) {
     //ipAddress = ipAddressPrompt(ipAddress);
     //portNum = portNumPrompt(portNum);
     packetSize = packetSizePrompt(packetSize);
+    
     //timeoutIntervalus = timeoutIntervalPrompt();
 
     protocolType = protocolTypePrompt(protocolType);
@@ -111,7 +127,13 @@ int main(int argc, char *argv[]) {
     //rangeOfSequenceNumbers = rangeOfSequenceNumbersPrompt(slidingWindowSize);
 
 
-    //situationalErrors = situationalErrorsPrompt(situationalErrors);
+    situationalErrors = situationalErrorsPrompt(situationalErrors);
+
+    if (situationalErrors == 2) {
+        //iNumPacketsToBeOutOfOrder = outOfOrderPacketsPrompt(&packetsToBeOutOfOrder[0]);
+        iNumDroppedPackets = dropPacketsPrompt(&droppedPackets[0]);
+        iNumCorruptPackets = corruptPacketsPrompt(&corruptPackets[0]);
+    }
 
     filePath = "/data/users/kranicac1696/src/" + filePathPrompt(filePath);
 
@@ -207,14 +229,20 @@ int main(int argc, char *argv[]) {
 
     while (!at_end_of_file || !gotLastAck) {
         // while (!at_end_of_file) {
-        
-        if (at_end_of_file) std::cout << "at_end_of_file is TRUE" << std::endl;
-        if (gotLastAck) std::cout << "gotLastAck is TRUE" << std::endl;
-        
+
+        if (DEBUGEVERYTHINGELSE) {
+			if (at_end_of_file) std::cout << "at_end_of_file is TRUE" << std::endl;
+			if (gotLastAck) std::cout << "gotLastAck is TRUE" << std::endl;
+		}
+
         switch (protocolType) {
             case 0:
+				// SAW is really just GBN with a window size of 1
                 // executeSAWProtocol();
                 // break;
+                slidingWindowSize = 1;
+                executeGBNProtocol();
+                break;
             case 1:
                 executeGBNProtocol();
                 break;
@@ -402,12 +430,12 @@ void executeGBNProtocol(void) {
 }
 
 void checkAllPacketsForTimeout() {
-	int numUsedPackets = 0;
-	
+    int numUsedPackets = 0;
+
     numPacketsToRetransmit = 0;
     for (int i = 0; i < slidingWindowSize; i++) {
         if (packets[i].isUsed()) {
-			numUsedPackets++;
+            numUsedPackets++;
             if (packets[i].getSent()) {
                 if (!packets[i].getAck()) {
                     //it's used and it's send, we need to check if it's timed out
@@ -415,7 +443,13 @@ void checkAllPacketsForTimeout() {
                     double us_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                             current_ticks - packets[i].getSentTime()).count();
                     if (us_elapsed > timeoutIntervalus) {
-                        std::cout << "Packet index for retransmit: " << i << std::endl;
+						
+                        if (DEBUGTIMOUTS) 
+                        {
+							std::cout << "Packet[" << i << "] timed out because us_elapsed: " << us_elapsed << " is > timeoutIntervalus: " << timeoutIntervalus << "." << std::endl;
+							// std::cout << "Packet index for retransmit: " << i << std::endl;
+						}
+                        
                         DisplayPacketTimedout(packets[i].getSN());
                         setSinglePacketForRetransmit(packets[i].getSN());
                         numPacketsToRetransmit++;
@@ -425,12 +459,11 @@ void checkAllPacketsForTimeout() {
             }
         }
     }
-    
-    if (numUsedPackets == 0)
-    {
-		// There are no packets that are waiting to be acked (or even used for that matter)
-		gotLastAck = true;
-	}
+
+    if (numUsedPackets == 0) {
+        // There are no packets that are waiting to be acked (or even used for that matter)
+        gotLastAck = true;
+    }
 }
 
 
@@ -439,8 +472,8 @@ void executeSRProtocol(void) {
         readPacketsFromFile(numPacketsToRead);
     }
 
-    printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
-    printQueue(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+
+    if (DEBUGEVERYTHINGELSE) printQueue(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
 
     readNewData = 0;
     //sending now
@@ -449,11 +482,12 @@ void executeSRProtocol(void) {
         //waiting for response
         num_bytes = recvfrom(sock, rec_buffer, 3, 0, (struct sockaddr *) &from, &length);
 
+		if (DEBUGEVERYTHINGELSE) {
+			displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
 
-        displayIntDataMessage(std::cout, logFile, "Number of bytes of response:", num_bytes, "");
-
-        displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
-                              MakeINT16(rec_buffer), "");
+			displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
+								MakeINT16(rec_buffer), "");
+		}
 
 
         if (num_bytes <= 0) {
@@ -463,15 +497,13 @@ void executeSRProtocol(void) {
             //setMarkForRetransmit(sequenceNum, slidingWindowSize);
             checkAllPacketsForTimeout();
         } else if (num_bytes > 0) {
-
-            if(num_bytes > 3){
-                std::cout << "number of bytes: " << num_bytes << " ----EXITING" << std::endl;
+            printWindow(std::cout, logFile, slidingWindowSize, sequenceNum, rangeOfSequenceNumbers);
+            if (num_bytes > 3) {
+                if (DEBUGEVERYTHINGELSE) std::cout << "number of bytes: " << num_bytes << " ----EXITING" << std::endl;
                 error_and_exit(logFile, "Exiting");
-            } else
-            {
-				displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ",
-								MakeINT16(rec_buffer), "");
-			}
+            } else {
+                if (DEBUGEVERYTHINGELSE) displayIntDataMessage(std::cout, logFile, "First two bytes, possible sequence number is: ", MakeINT16(rec_buffer), "");
+            }
             //WE GOT SOME DATA
             int16_t receivedSeqNum = MakeINT16(rec_buffer);
 
@@ -482,7 +514,7 @@ void executeSRProtocol(void) {
 
                 int slideFactor = isInSlidingWindow(sequenceNum, receivedSeqNum, slidingWindowSize,
                                                     rangeOfSequenceNumbers);
-                std::cout << "Slide Factor: " << slideFactor << std::endl;
+                if (DEBUGEVERYTHINGELSE) std::cout << "Slide Factor: " << slideFactor << std::endl;
                 if (receivedSeqNum == sequenceNum) { //slideFactor == 1) {
                     //This means we got an ack on our first window so we only shift our window by one
                     slideWindow(slideFactor, receivedSeqNum);
@@ -498,7 +530,7 @@ void executeSRProtocol(void) {
                     int index = getPacketIndexBySN(receivedSeqNum);
 
                     if (index >= 0) {
-                        std::cout << "Setting packet index: " << index << " to acked" << std::endl;
+                        if (DEBUGEVERYTHINGELSE) std::cout << "Setting packet index: " << index << " to acked" << std::endl;
                         packets[index].setAck(true);
                     }
 
@@ -509,16 +541,16 @@ void executeSRProtocol(void) {
             } else {
                 // We should never get a response that isn't an ACK
                 DisplayNakReceived(receivedSeqNum);
-                setMarkForRetransmit(sequenceNum, slidingWindowSize);
+                setSinglePacketForRetransmit(sequenceNum);
                 packets_failed++;
             }
         }
     } else {
-        std::cout << "in gbn: not sending packet" <<
-                  std::endl;
+        if (DEBUGEVERYTHINGELSE) std::cout << "in gbn: not sending packet" << std::endl;
     }
 }
 
+//this function was for gbn
 void setMarkForRetransmit(uint16_t seq, int numPackets) {
     int num = 0;
     for (int i = 0; i < numPackets; i++) {
@@ -547,6 +579,7 @@ void setMarkForRetransmit(uint16_t seq, int numPackets) {
 
 }
 
+//this function is for selective repeat
 void setSinglePacketForRetransmit(uint16_t seq) {
     int num = 0;
 
@@ -573,33 +606,81 @@ void setSinglePacketForRetransmit(uint16_t seq) {
 void generateRandomSituationalErrors(char *buff, uint16_t seq, int bsRead) {
     // Don't do more than one of these errors at a time!
 
-    //10% of the time the packet will be out of order
-    // This worked for GBN but not for Selective Repeat.  If we are mutating the sequence number
-    // Selective Repeat could accept it as a valid sequence number (if in its window) and store it
-    // in the packet queue.  This will corrupt the write file.  For SR, we should maybe NOT mutate the
-    // sequence number but instead send some packets from the packet array out of order instead.
-    /*if (!(packets_sent % 10)) {
-        //inserting sequence # into buffer
-        BreakINT16(buff, seq + rand() % 10 + 1);
+    //random num to decide which type of situational errors
+    int randNum = (rand() % 3);
+    switch (randNum) {
+        case 0:
 
-        // If we mutate the sequence number, we still need a good CRC so recalculate it
-        uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
-        BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+            //10% of the time the packet will be out of order
+            // This worked for GBN but not for Selective Repeat.  If we are mutating the sequence number
+            // Selective Repeat could accept it as a valid sequence number (if in its window) and store it
+            // in the packet queue.  This will corrupt the write file.  For SR, we should maybe NOT mutate the
+            // sequence number but instead send some packets from the packet array out of order instead.
 
-    } else */
-    if (!((packets_sent + rand() % 10 + 1) % 10)) {
-    // if ((originalPackets % 10) == 0) {
-        //10% of the time we will send a bad crc
-        //inducing bad crc
-        uint32_t CRC = rand() % 10 + 1;
-        BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
-    } /*
-    // The server also simulates packets lost by just dropping the packet and not sending the ACK.
-    else if (!((packets_sent + rand() % 10 + 1) % 10)) {
-        //10% the packet will appear to be sent, but will be not actually be send/ it will be lost
-        simulateLost = true;
+            /*
+            if (!(packets_sent % 10)) {
+                //inserting sequence # into buffer
+                BreakINT16(buff, seq + rand() % 10 + 1);
+
+                // If we mutate the sequence number, we still need a good CRC so recalculate it
+                uint32_t CRC = crcFun((uint8_t *) buff, bsRead + START_DATA_INDEX);
+                BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+            }*/
+            break;
+        case 1:
+            if (!((originalPackets + rand() % 10 + 1) % 10)) {
+                // if ((originalPackets % 10) == 0) {
+                //10% of the time we will send a bad crc
+                //inducing bad crc
+                uint32_t CRC = rand() % 10 + 1;
+                BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+            }
+            break;
+        case 2:
+            // The server also simulates packets lost by just dropping the packet and not sending the ACK.
+            if (!((originalPackets + rand() % 10 + 1) % 10)) {
+                //10% the packet will appear to be sent, but will be not actually be send/ it will be lost
+                simulateLost = true;
+            }
+            break;
     }
-    */
+}
+
+void generateUserSituationalErrors(char *buff, int packet_num, int bsRead) {
+	
+    if (DEBUGUSERERRORS) std::cout << "start of sit errors function" << std::endl;
+    
+    // We should clarify if we want to drop the sequence number (which may repeat quite often) or the absolute count
+    // of packets sent.  For example if they enter 5 do they mean drop the packet every time sequence number is 5 or 
+    // do they mean drop the fifth packet ever sent (this implies just 1 time).  In the first case what if they enter
+    // a number higher then the max sequence number?   It would never get dropped.
+    
+    // This gets stuck in a loop, if we use the sequence number, because the the server never acks it and it keeps
+    // on never sending it and we just end up never sending seq # 4 for example.  This should be using the sequential
+    // packet number sent, to prevent an infinite loop.
+    if (DEBUGUSERERRORS) std::cout << "inumdropped: " << iNumDroppedPackets << std::endl;
+    for (int i = 0; i < iNumDroppedPackets; i++) {
+        if (DEBUGUSERERRORS) std::cout << "start of loop" << std::endl;
+        if (DEBUGUSERERRORS) std::cout << "droppedIndex: " << droppedPackets[i] << std::endl;
+        if (droppedPackets[i] == packet_num) {
+            if (DEBUGUSERERRORS) std::cout << "before lost" << std::endl;
+            simulateLost = true;
+            std::cout << "USER DEFINED SITUATIONAL ERROR - DROPPING PACKET NUMBER: " << packet_num << std::endl;
+            break;
+        }
+    }
+    
+    // Comments above apply here too!
+    for (int i = 0; i < iNumCorruptPackets; i++) {
+        if (DEBUGUSERERRORS) std::cout << "start of loop" << std::endl;
+        if (corruptPackets[i] == packet_num) {
+            if (DEBUGUSERERRORS) std::cout << "before crc corruption" << std::endl;
+            uint32_t CRC = rand() % 10 + 1;
+            BreakINT32(&buff[bsRead + START_DATA_INDEX], CRC);
+            std::cout << "USER DEFINED SITUATIONAL ERROR - CORRUPTING CRC FOR PACKET NUMBER: " << packet_num << std::endl;
+            break;
+        }
+    }
 }
 
 
@@ -651,10 +732,10 @@ void readPacketsFromFile(int nPacks) {
     int lBytesRead = 0;
 
     if (nPacks <= 0 || nPacks > MAX_WINDOW_SIZE) {
-        std::cout << "In readPacketsFromFile with invalid nPacks: " << nPacks << std::endl;
+        if (DEBUGEVERYTHINGELSE) std::cout << "In readPacketsFromFile with invalid nPacks: " << nPacks << std::endl;
         return;
     } else {
-        std::cout << "In readPacketsFromFile with nPacks: " << nPacks << std::endl;
+        if (DEBUGEVERYTHINGELSE) std::cout << "In readPacketsFromFile with nPacks: " << nPacks << std::endl;
     }
 
     for (int i = 0; i < nPacks; i++) {
@@ -668,18 +749,18 @@ void readPacketsFromFile(int nPacks) {
             if (lBytesRead < 0) error_and_exit(logFile, "Could not open file for reading");
 
             if (lBytesRead == 0) {
-                std::cout << "At end of file in readPacketsFromFile" << std::endl;
+                if (DEBUGEVERYTHINGELSE) std::cout << "At end of file in readPacketsFromFile" << std::endl;
                 at_end_of_file = 1;
                 return;
             } else if (lBytesRead < packetSize) {
                 //We know we must have read the last bit of data
-                std::cout << "At end of file in readPacketsFromFile" << std::endl;
+                if (DEBUGEVERYTHINGELSE) std::cout << "At end of file in readPacketsFromFile" << std::endl;
                 at_end_of_file = 1;
             }
             totalBytesRead += lBytesRead;
             originalPackets++;
             packets[packIndex].loadPacket(nextSeqNum, lBytesRead, lBuff);
-            std::cout << "packet index: " << packIndex << " nextSeqNum: " << nextSeqNum << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "packet index: " << packIndex << " nextSeqNum: " << nextSeqNum << std::endl;
 
             lastSeqNum = nextSeqNum;
             nextSeqNum++;
@@ -708,29 +789,33 @@ bool sendPackets(int nPacks, uint16_t startSN) {
         // int packIndex = getUnsentPacketIndex();
 
         if ((packIndex > -1) && (packets[packIndex].getSent() == false)) {
-            std::cout << "In sendPackets. nPacks: " << nPacks << std::endl;
-            std::cout << "In sendPackets. packIndex: " << packIndex << std::endl;
-            std::cout << "In sendPackets. Packet sequenceNum: " << packets[packIndex].getSN() << std::endl;
-            std::cout << "packet_bytes_read: " << packets[packIndex].packet_bytes_read << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "In sendPackets. nPacks: " << nPacks << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "In sendPackets. packIndex: " << packIndex << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "In sendPackets. Packet sequenceNum: " << packets[packIndex].getSN() << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "packet_bytes_read: " << packets[packIndex].packet_bytes_read << std::endl;
 
             // use a temporary buffer so original seq num doesn't get permanently changed when we are
             // simulating errors.
             bzero(buffer, MAX_BUF_SIZE);
             memcpy(buffer, packets[packIndex].getBuffPoint(), packets[packIndex].packet_bytes_read + WRAPPER_SIZE);
-
+            if (DEBUGUSERERRORS) std::cout << "sent packets: " << packets_sent << std::endl;
             if (situationalErrors == 1 && !at_end_of_file) {
                 generateRandomSituationalErrors(buffer, packets[packIndex].getSN(),
                                                 packets[packIndex].packet_bytes_read);
 
                 // displayBuffer(std::cout, &buffer[START_DATA_INDEX], packets[packIndex].packet_bytes_read);
-            }
 
+            } else if (situationalErrors == 2 && !at_end_of_file) {
+                generateUserSituationalErrors(buffer, packets_sent,
+                                              packets[packIndex].packet_bytes_read);
+            }
+            if (DEBUGUSERERRORS) std::cout << "simulatelost: " << simulateLost << std::endl;
             if (simulateLost) {
                 // Dont send
                 simulateLost = false;
             } else {
                 //sending now
-                std::cout << "In sendPackets, packet bytes read: " << packets[packIndex].packet_bytes_read << std::endl;
+                if (DEBUGEVERYTHINGELSE) std::cout << "In sendPackets, packet bytes read: " << packets[packIndex].packet_bytes_read << std::endl;
                 sendto(sock, buffer,
                        packets[packIndex].packet_bytes_read + WRAPPER_SIZE, 0,
                        (const struct sockaddr *) &client, length);
@@ -770,8 +855,7 @@ void slideWindow(int slideFactor, uint16_t recSN) {
         if (!packets[0].getAck()) {
             break;
         } else {
-            std::cout << "In slideWindow, sliding additional packet of sequenceNum: " << packets[0].getSN()
-                      << std::endl;
+            if (DEBUGEVERYTHINGELSE) std::cout << "In slideWindow, sliding additional packet of sequenceNum: " << packets[0].getSN() << std::endl;
         }
     }
 }
@@ -810,7 +894,7 @@ void DisplayPacketTimedout(int packetNum) {
 }
 
 void doDoneStuff() {
-    std::cout << "In DoDoneStuff" << std::endl;
+    if (DEBUGEVERYTHINGELSE) std::cout << "In DoDoneStuff" << std::endl;
     //we're done but to be safe we will send command to server to close the file
     //30,000 is a special sequence number close file code
     BreakINT16(buffer, 30000);

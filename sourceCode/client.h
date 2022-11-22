@@ -21,7 +21,8 @@ void executeGBNProtocol(void);
 void executeSRProtocol(void);
 
 void generateRandomSituationalErrors(char* buff, uint16_t seq, int bsRead);
-	
+void generateUserSituationalErrors(char *buff, int packet_num, int bsRead);
+
 void setMarkForRetransmit(uint16_t seq, int numPackets);
 void setSinglePacketForRetransmit(uint16_t seq);
 void checkAllPacketsForTimeout();
